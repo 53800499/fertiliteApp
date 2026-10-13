@@ -5,6 +5,11 @@ import '../../data/models/cycle_models.dart';
 import '../bloc/cycle_bloc.dart';
 import '../bloc/cycle_event.dart';
 import '../bloc/cycle_state.dart';
+import '../../../../core/network/network_cubit.dart';
+import '../../../../core/widgets/offline_state_view.dart';
+import '../../../../core/widgets/offline_badge_chip.dart';
+import '../../../../core/widgets/modern_app_header.dart';
+import '../../../../core/error/error_feedback.dart';
 
 class CycleStatsScreen extends StatefulWidget {
   const CycleStatsScreen({super.key});
@@ -20,27 +25,25 @@ class _CycleStatsScreenState extends State<CycleStatsScreen> {
     context.read<CycleBloc>().add(LoadCycleStatsEvent());
   }
 
+  bool _isOffline(BuildContext context) {
+    try {
+      return !BlocProvider.of<NetworkCubit>(context).state.isOnline;
+    } catch (_) {
+      return false;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.background,
-      appBar: AppBar(
-        title: const Text(
-          'Statistiques & Régularité',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: AppTheme.textDark),
-        ),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded, color: AppTheme.textMuted),
-            onPressed: () {
-              context.read<CycleBloc>().add(LoadCycleStatsEvent());
-              context.read<CycleBloc>().add(LoadCyclesEvent());
-            },
-            tooltip: 'Actualiser',
-          ),
-        ],
+      appBar: ModernAppHeader(
+        subtitle: 'Biométrie & Régularité',
+        title: 'Statistiques & Régularité',
+        onRefresh: () {
+          context.read<CycleBloc>().add(LoadCycleStatsEvent());
+          context.read<CycleBloc>().add(LoadCyclesEvent());
+        },
       ),
       body: BlocBuilder<CycleBloc, CycleState>(
         builder: (context, state) {
@@ -48,15 +51,63 @@ class _CycleStatsScreenState extends State<CycleStatsScreen> {
             return const Center(child: CircularProgressIndicator(color: AppTheme.primary));
           }
 
+          if (state is CycleFailureState) {
+            final isOffline = _isOffline(context) ||
+                state.message.toLowerCase().contains('connexion') ||
+                state.message.toLowerCase().contains('hors ligne') ||
+                state.message.toLowerCase().contains('socketexception') ||
+                state.message.toLowerCase().contains('failed host lookup');
+
+            if (isOffline) {
+              return OfflineStateView(
+                onRetry: () {
+                  context.read<CycleBloc>().add(LoadCycleStatsEvent());
+                  context.read<CycleBloc>().add(LoadCyclesEvent());
+                },
+              );
+            }
+
+            return AppErrorEmptyView(
+              error: state.message,
+              onRetry: () {
+                context.read<CycleBloc>().add(LoadCycleStatsEvent());
+                context.read<CycleBloc>().add(LoadCyclesEvent());
+              },
+            );
+          }
+
           final loaded = state is CyclesLoadedState ? state : null;
           final stats = loaded?.stats;
           final cycles = loaded?.cycles ?? [];
+
+          if (stats == null && cycles.isEmpty && _isOffline(context)) {
+            return OfflineStateView(
+              onRetry: () {
+                context.read<CycleBloc>().add(LoadCycleStatsEvent());
+                context.read<CycleBloc>().add(LoadCyclesEvent());
+              },
+            );
+          }
 
           return SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                Builder(
+                  builder: (ctx) {
+                    if (!_isOffline(ctx)) return const SizedBox.shrink();
+                    return const Padding(
+                      padding: EdgeInsets.only(bottom: 14),
+                      child: Row(
+                        children: [
+                          OfflineBadgeChip(label: 'Statistiques basées sur les données locales'),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+
                 // 1. Hero Card : Synthèse de la régularité
                 _buildHeroRegularityCard(stats),
                 const SizedBox(height: 20),
@@ -71,7 +122,7 @@ class _CycleStatsScreenState extends State<CycleStatsScreen> {
 
                 // 4. Note médicale & explications pédagogiques
                 _buildMedicalExplanationCard(),
-                const SizedBox(height: 24),
+                const SizedBox(height: 90),
               ],
             ),
           );
@@ -97,28 +148,35 @@ class _CycleStatsScreenState extends State<CycleStatsScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.25),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      isReliable ? Icons.verified_rounded : Icons.info_outline_rounded,
-                      color: Colors.white,
-                      size: 14,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      isReliable ? 'Calcul basé sur vos cycles' : 'Données préliminaires',
-                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
-                    ),
-                  ],
+              Flexible(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.25),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        isReliable ? Icons.verified_rounded : Icons.info_outline_rounded,
+                        color: Colors.white,
+                        size: 14,
+                      ),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          isReliable ? 'Calcul basé sur vos cycles' : 'Données préliminaires',
+                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
+              const SizedBox(width: 8),
               const Icon(Icons.auto_graph_rounded, color: Colors.white70, size: 24),
             ],
           ),
@@ -206,7 +264,7 @@ class _CycleStatsScreenState extends State<CycleStatsScreen> {
     required Color color,
   }) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
@@ -217,23 +275,46 @@ class _CycleStatsScreenState extends State<CycleStatsScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(title, style: const TextStyle(fontSize: 11.5, color: AppTheme.textMuted, fontWeight: FontWeight.w600)),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    color: AppTheme.textMuted,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 4),
               Container(
-                padding: const EdgeInsets.all(6),
+                padding: const EdgeInsets.all(5),
                 decoration: BoxDecoration(
                   color: color.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                child: Icon(icon, color: color, size: 16),
+                child: Icon(icon, color: color, size: 15),
               ),
             ],
           ),
-          const SizedBox(height: 10),
-          Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: AppTheme.textDark)),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900, color: AppTheme.textDark),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
           const SizedBox(height: 2),
-          Text(subtitle, style: const TextStyle(fontSize: 10.5, color: AppTheme.textMuted)),
+          Text(
+            subtitle,
+            style: const TextStyle(fontSize: 10.5, color: AppTheme.textMuted),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
         ],
       ),
     );
@@ -336,16 +417,27 @@ class _CycleStatsScreenState extends State<CycleStatsScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: 12,
+                  runSpacing: 4,
                   children: [
-                    Container(width: 8, height: 8, decoration: const BoxDecoration(color: AppTheme.primary, shape: BoxShape.circle)),
-                    const SizedBox(width: 6),
-                    const Text('Normal (24-35 j)', style: TextStyle(fontSize: 11, color: AppTheme.textMuted)),
-                    const SizedBox(width: 16),
-                    Container(width: 8, height: 8, decoration: const BoxDecoration(color: Colors.orange, shape: BoxShape.circle)),
-                    const SizedBox(width: 6),
-                    const Text('Atypique (<24 ou >35 j)', style: TextStyle(fontSize: 11, color: AppTheme.textMuted)),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(width: 8, height: 8, decoration: const BoxDecoration(color: AppTheme.primary, shape: BoxShape.circle)),
+                        const SizedBox(width: 5),
+                        const Text('Normal (24-35 j)', style: TextStyle(fontSize: 11, color: AppTheme.textMuted)),
+                      ],
+                    ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(width: 8, height: 8, decoration: const BoxDecoration(color: Colors.orange, shape: BoxShape.circle)),
+                        const SizedBox(width: 5),
+                        const Text('Atypique (<24 ou >35 j)', style: TextStyle(fontSize: 11, color: AppTheme.textMuted)),
+                      ],
+                    ),
                   ],
                 ),
               ],

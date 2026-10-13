@@ -12,6 +12,12 @@ import '../../../observations/presentation/bloc/observation_bloc.dart';
 import '../../../observations/presentation/bloc/observation_event.dart';
 import '../../../observations/presentation/bloc/observation_state.dart';
 import '../../../observations/presentation/widgets/day_observations_card.dart';
+import '../../../fertility/presentation/bloc/fertility_bloc.dart';
+import '../../../fertility/presentation/widgets/fertility_explanation_bottom_sheet.dart';
+import '../../../../core/network/network_cubit.dart';
+import '../../../../core/widgets/offline_state_view.dart';
+import '../../../../core/widgets/modern_app_header.dart';
+import '../../../../core/error/error_feedback.dart';
 
 class CalendarScreen extends StatefulWidget {
   const CalendarScreen({super.key});
@@ -28,6 +34,11 @@ class _CalendarScreenState extends State<CalendarScreen> {
   void initState() {
     super.initState();
     context.read<CycleBloc>().add(LoadCyclesEvent());
+    context.read<FertilityBloc>().add(const LoadCurrentFertilityEvent());
+    context.read<FertilityBloc>().add(LoadMonthCalendarEvent(
+          year: _currentMonth.year,
+          month: _currentMonth.month,
+        ));
     final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
     context.read<ObservationBloc>().add(LoadDayObservationsEvent(dateStr));
   }
@@ -36,29 +47,38 @@ class _CalendarScreenState extends State<CalendarScreen> {
     setState(() {
       _currentMonth = DateTime(_currentMonth.year, _currentMonth.month - 1, 1);
     });
+    context.read<FertilityBloc>().add(LoadMonthCalendarEvent(
+          year: _currentMonth.year,
+          month: _currentMonth.month,
+        ));
   }
 
   void _nextMonth() {
     setState(() {
       _currentMonth = DateTime(_currentMonth.year, _currentMonth.month + 1, 1);
     });
+    context.read<FertilityBloc>().add(LoadMonthCalendarEvent(
+          year: _currentMonth.year,
+          month: _currentMonth.month,
+        ));
+  }
+
+  bool _isOffline(BuildContext context) {
+    try {
+      return !BlocProvider.of<NetworkCubit>(context).state.isOnline;
+    } catch (_) {
+      return false;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.background,
-      appBar: AppBar(
-        title: const Text('Calendrier & Fertilité', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: AppTheme.textDark)),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded, color: AppTheme.textMuted),
-            onPressed: () => context.read<CycleBloc>().add(LoadCyclesEvent()),
-            tooltip: 'Actualiser',
-          ),
-        ],
+      appBar: ModernAppHeader(
+        subtitle: "Aujourd'hui",
+        title: 'Calendrier & Fertilité',
+        onRefresh: () => context.read<CycleBloc>().add(LoadCyclesEvent()),
       ),
       body: BlocBuilder<CycleBloc, CycleState>(
         builder: (context, state) {
@@ -67,23 +87,21 @@ class _CalendarScreenState extends State<CalendarScreen> {
           }
 
           if (state is CycleFailureState) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.error_outline_rounded, size: 48, color: Colors.red),
-                    const SizedBox(height: 12),
-                    Text(state.message, textAlign: TextAlign.center),
-                    const SizedBox(height: 16),
-                    ElevatedButton(
-                      onPressed: () => context.read<CycleBloc>().add(LoadCyclesEvent()),
-                      child: const Text('Réessayer'),
-                    ),
-                  ],
-                ),
-              ),
+            final isOffline = _isOffline(context) ||
+                state.message.toLowerCase().contains('connexion') ||
+                state.message.toLowerCase().contains('hors ligne') ||
+                state.message.toLowerCase().contains('socketexception') ||
+                state.message.toLowerCase().contains('failed host lookup');
+
+            if (isOffline) {
+              return OfflineStateView(
+                onRetry: () => context.read<CycleBloc>().add(LoadCyclesEvent()),
+              );
+            }
+
+            return AppErrorEmptyView(
+              error: state.message,
+              onRetry: () => context.read<CycleBloc>().add(LoadCyclesEvent()),
             );
           }
 
@@ -128,112 +146,225 @@ class _CalendarScreenState extends State<CalendarScreen> {
                     );
                   },
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 95),
               ],
             ),
           );
         },
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          LogFlowBottomSheet.show(
-            context,
-            date: _selectedDate,
-            existingJour: context.read<CycleBloc>().state is CyclesLoadedState
-                ? (context.read<CycleBloc>().state as CyclesLoadedState).getJourReglesForDate(_selectedDate)
-                : null,
-          );
-        },
-        backgroundColor: AppTheme.primary,
-        icon: const Icon(Icons.add_rounded, color: Colors.white),
-        label: const Text('Saisie du jour', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 1),
+        child: FloatingActionButton.extended(
+          onPressed: () {
+            LogFlowBottomSheet.show(
+              context,
+              date: _selectedDate,
+              existingJour: context.read<CycleBloc>().state is CyclesLoadedState
+                  ? (context.read<CycleBloc>().state as CyclesLoadedState).getJourReglesForDate(_selectedDate)
+                  : null,
+            );
+          },
+          backgroundColor: AppTheme.primary,
+          icon: const Icon(Icons.add_rounded, color: Colors.white),
+          label: const Text('Saisie du jour', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        ),
       ),
     );
   }
 
   Widget _buildHeroStatusCard(CycleModel? cycle, int currentDay) {
-    String phaseLabel = 'Phase folliculaire';
-    Color phaseColor = AppTheme.primary;
-    String fertilityText = 'Probabilité faible';
+    return BlocBuilder<FertilityBloc, FertilityState>(
+      builder: (context, fertState) {
+        String phaseLabel = 'Phase folliculaire';
+        Color phaseColor = AppTheme.primary;
+        String fertilityText = 'Probabilité faible';
+        String confidenceText = '';
 
-    if (currentDay >= 1 && currentDay <= (cycle?.dureeReglesJours ?? 5)) {
-      phaseLabel = 'Règles en cours';
-      phaseColor = AppTheme.periodColor;
-      fertilityText = 'Très faible';
-    } else if (currentDay >= 10 && currentDay <= 16) {
-      phaseLabel = 'Fenêtre fertile';
-      phaseColor = AppTheme.accentRose;
-      fertilityText = currentDay == 14 ? 'Ovulation estimée' : 'Élevée';
-    } else if (currentDay > 16) {
-      phaseLabel = 'Phase lutéale';
-      phaseColor = Colors.teal;
-      fertilityText = 'Faible';
-    }
+        if (fertState is FertilityLoadedState) {
+          final pred = fertState.currentPrediction;
+          if (pred.fertilityCategory == 'elevee') {
+            fertilityText = 'Élevée (${pred.fertilityScoreValue.round()}%)';
+            phaseColor = AppTheme.accentRose;
+          } else if (pred.fertilityCategory == 'moyenne') {
+            fertilityText = 'Moyenne (${pred.fertilityScoreValue.round()}%)';
+            phaseColor = Colors.orange;
+          } else {
+            fertilityText = 'Faible (${pred.fertilityScoreValue.round()}%)';
+            phaseColor = Colors.teal;
+          }
 
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: AppTheme.softHeroGradient,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: AppTheme.floatingShadow,
-      ),
-      child: Row(
-        children: [
-          // Jauge circulaire avec jour du cycle
-          Container(
-            width: 82,
-            height: 82,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.white.withValues(alpha: 0.2),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.5), width: 3),
-            ),
-            child: Center(
+          if (currentDay >= 1 && currentDay <= (cycle?.dureeReglesJours ?? 5)) {
+            phaseLabel = 'Règles en cours';
+            phaseColor = AppTheme.periodColor;
+          } else if (pred.estimatedOvulationDate != null) {
+            final nowStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+            if (nowStr == pred.estimatedOvulationDate) {
+              phaseLabel = 'Jour d’ovulation';
+              phaseColor = AppTheme.accentRose;
+            } else if (nowStr.compareTo(pred.fertileWindow.startDate) >= 0 &&
+                nowStr.compareTo(pred.fertileWindow.endDate) <= 0) {
+              phaseLabel = 'Fenêtre fertile';
+              phaseColor = AppTheme.accentRose;
+            } else if (currentDay > 16) {
+              phaseLabel = 'Phase lutéale';
+              phaseColor = Colors.teal;
+            }
+          }
+          confidenceText = 'Confiance : ${pred.confidenceLevel}';
+        } else {
+          // Fallback initial
+          if (currentDay >= 1 && currentDay <= (cycle?.dureeReglesJours ?? 5)) {
+            phaseLabel = 'Règles en cours';
+            phaseColor = AppTheme.periodColor;
+            fertilityText = 'Très faible';
+          } else if (currentDay >= 10 && currentDay <= 16) {
+            phaseLabel = 'Fenêtre fertile';
+            phaseColor = AppTheme.accentRose;
+            fertilityText = currentDay == 14 ? 'Ovulation estimée' : 'Élevée';
+          } else if (currentDay > 16) {
+            phaseLabel = 'Phase lutéale';
+            phaseColor = Colors.teal;
+            fertilityText = 'Faible';
+          }
+        }
+
+        return Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () => FertilityExplanationBottomSheet.show(context),
+            borderRadius: BorderRadius.circular(24),
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: AppTheme.softHeroGradient,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: AppTheme.floatingShadow,
+              ),
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Text('JOUR', style: TextStyle(fontSize: 10, color: Colors.white70, fontWeight: FontWeight.bold, letterSpacing: 1)),
-                  Text(
-                    cycle != null ? '$currentDay' : '--',
-                    style: const TextStyle(fontSize: 28, color: Colors.white, fontWeight: FontWeight.w900),
+                  Row(
+                    children: [
+                      // Jauge circulaire avec jour du cycle
+                      Container(
+                        width: 82,
+                        height: 82,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white.withValues(alpha: 0.2),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.5),
+                            width: 3,
+                          ),
+                        ),
+                        child: Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Text(
+                                'JOUR',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.white70,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 1,
+                                ),
+                              ),
+                              Text(
+                                cycle != null ? '$currentDay' : '--',
+                                style: const TextStyle(
+                                  fontSize: 28,
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 18),
+
+                      // Informations de fertilité
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: phaseColor.withValues(alpha: 0.35),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.4),
+                                ),
+                              ),
+                              child: Text(
+                                phaseLabel,
+                                style: const TextStyle(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            const Text(
+                              'Fertilité estimée :',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.white70,
+                              ),
+                            ),
+                            Text(
+                              fertilityText,
+                              style: const TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
+                              ),
+                            ),
+                            if (confidenceText.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: Text(
+                                  confidenceText,
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.white60,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  // Lien explicabilité
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: const [
+                      Text(
+                        'Comprendre mon estimation',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                          decoration: TextDecoration.underline,
+                        ),
+                      ),
+                      SizedBox(width: 4),
+                      Icon(Icons.arrow_forward_ios_rounded, size: 10, color: Colors.white),
+                    ],
                   ),
                 ],
               ),
             ),
           ),
-          const SizedBox(width: 18),
-
-          // Informations de fertilité
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: phaseColor.withValues(alpha: 0.35),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.white.withValues(alpha: 0.4)),
-                  ),
-                  child: Text(
-                    phaseLabel,
-                    style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Colors.white),
-                  ),
-                ),
-                const SizedBox(height: 6),
-                const Text(
-                  'Fertilité estimée :',
-                  style: TextStyle(fontSize: 12, color: Colors.white70),
-                ),
-                Text(
-                  fertilityText,
-                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: Colors.white),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -500,6 +631,24 @@ class _CalendarScreenState extends State<CalendarScreen> {
   }
 
   bool _isFertileDay(DateTime date, CycleModel? cycle) {
+    try {
+      final fertState = context.read<FertilityBloc>().state;
+      if (fertState is FertilityLoadedState) {
+        final dateStr = DateFormat('yyyy-MM-dd').format(date);
+        final monthCal = fertState.monthCalendar;
+        if (monthCal != null) {
+          for (final d in monthCal.days) {
+            if (d.date == dateStr) return d.isFertileDay;
+          }
+        }
+        final start = fertState.currentPrediction.fertileWindow.startDate;
+        final end = fertState.currentPrediction.fertileWindow.endDate;
+        if (start.isNotEmpty && end.isNotEmpty) {
+          return dateStr.compareTo(start) >= 0 && dateStr.compareTo(end) <= 0;
+        }
+      }
+    } catch (_) {}
+
     if (cycle == null) return false;
     try {
       final start = DateTime.parse(cycle.dateDebut);
@@ -511,6 +660,23 @@ class _CalendarScreenState extends State<CalendarScreen> {
   }
 
   bool _isOvulationDay(DateTime date, CycleModel? cycle) {
+    try {
+      final fertState = context.read<FertilityBloc>().state;
+      if (fertState is FertilityLoadedState) {
+        final dateStr = DateFormat('yyyy-MM-dd').format(date);
+        final monthCal = fertState.monthCalendar;
+        if (monthCal != null) {
+          for (final d in monthCal.days) {
+            if (d.date == dateStr) return d.isOvulationDay;
+          }
+        }
+        final ovulation = fertState.currentPrediction.estimatedOvulationDate;
+        if (ovulation != null && ovulation.isNotEmpty) {
+          return dateStr == ovulation;
+        }
+      }
+    } catch (_) {}
+
     if (cycle == null) return false;
     try {
       final start = DateTime.parse(cycle.dateDebut);

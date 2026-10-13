@@ -7,6 +7,10 @@ import '../bloc/cycle_event.dart';
 import '../bloc/cycle_state.dart';
 import '../widgets/log_flow_bottom_sheet.dart';
 import '../widgets/edit_cycle_bottom_sheet.dart';
+import '../../../../core/network/network_cubit.dart';
+import '../../../../core/widgets/offline_state_view.dart';
+import '../../../../core/widgets/modern_app_header.dart';
+import '../../../../core/error/error_feedback.dart';
 
 class CycleHistoryScreen extends StatefulWidget {
   const CycleHistoryScreen({super.key});
@@ -22,26 +26,46 @@ class _CycleHistoryScreenState extends State<CycleHistoryScreen> {
     context.read<CycleBloc>().add(LoadCyclesEvent());
   }
 
+  bool _isOffline(BuildContext context) {
+    try {
+      return !BlocProvider.of<NetworkCubit>(context).state.isOnline;
+    } catch (_) {
+      return false;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.background,
-      appBar: AppBar(
-        title: const Text('Historique des Cycles', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: AppTheme.textDark)),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded, color: AppTheme.textMuted),
-            onPressed: () => context.read<CycleBloc>().add(LoadCyclesEvent()),
-            tooltip: 'Actualiser',
-          ),
-        ],
+      appBar: ModernAppHeader(
+        subtitle: 'Suivi temporel',
+        title: 'Historique des Cycles',
+        onRefresh: () => context.read<CycleBloc>().add(LoadCyclesEvent()),
       ),
       body: BlocBuilder<CycleBloc, CycleState>(
         builder: (context, state) {
           if (state is CycleLoadingState) {
             return const Center(child: CircularProgressIndicator(color: AppTheme.primary));
+          }
+
+          if (state is CycleFailureState) {
+            final isOffline = _isOffline(context) ||
+                state.message.toLowerCase().contains('connexion') ||
+                state.message.toLowerCase().contains('hors ligne') ||
+                state.message.toLowerCase().contains('socketexception') ||
+                state.message.toLowerCase().contains('failed host lookup');
+
+            if (isOffline) {
+              return OfflineStateView(
+                onRetry: () => context.read<CycleBloc>().add(LoadCyclesEvent()),
+              );
+            }
+
+            return AppErrorEmptyView(
+              error: state.message,
+              onRetry: () => context.read<CycleBloc>().add(LoadCyclesEvent()),
+            );
           }
 
           final cycles = state is CyclesLoadedState ? state.cycles : <CycleModel>[];
@@ -134,6 +158,7 @@ class _CycleHistoryScreenState extends State<CycleHistoryScreen> {
 
                 // Liste chronologique des cycles
                 ...cycles.map((cycle) => _buildCycleCard(cycle)),
+                const SizedBox(height: 90),
               ],
             ),
           );

@@ -14,6 +14,8 @@ class ApiClient {
     String? baseUrl,
     SecureStorageHelper? storage,
     void Function()? onSessionExpired,
+    void Function()? onOnline,
+    void Function()? onOffline,
   }) {
     final effectiveStorage = storage ?? SecureStorageHelper();
     final effectiveBaseUrl = baseUrl ?? ApiConstants.defaultBaseUrl;
@@ -27,6 +29,25 @@ class ApiClient {
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
+        },
+      ),
+    );
+
+    // Intercepteur de détection de connectivité en direct
+    dio.interceptors.add(
+      InterceptorsWrapper(
+        onResponse: (response, handler) {
+          onOnline?.call();
+          return handler.next(response);
+        },
+        onError: (err, handler) {
+          final isNetworkError = err.type == DioExceptionType.connectionError ||
+              (err.message != null && err.message!.toLowerCase().contains('socketexception')) ||
+              (err.message != null && err.message!.toLowerCase().contains('failed host lookup'));
+          if (isNetworkError) {
+            onOffline?.call();
+          }
+          return handler.next(err);
         },
       ),
     );

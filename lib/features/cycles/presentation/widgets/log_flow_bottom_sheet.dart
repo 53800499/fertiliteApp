@@ -4,6 +4,9 @@ import '../../../../core/theme/app_theme.dart';
 import '../../data/models/cycle_models.dart';
 import '../bloc/cycle_bloc.dart';
 import '../bloc/cycle_event.dart';
+import '../../../../core/network/network_cubit.dart';
+import '../../../../core/error/api_exception.dart';
+import '../../../../core/error/error_feedback.dart';
 
 class LogFlowBottomSheet extends StatefulWidget {
   final DateTime initialDate;
@@ -69,6 +72,24 @@ class _LogFlowBottomSheetState extends State<LogFlowBottomSheet> {
   }
 
   void _save() {
+    bool isOnline = true;
+    try {
+      isOnline = BlocProvider.of<NetworkCubit>(context, listen: false).state.isOnline;
+    } catch (_) {}
+    if (!isOnline) {
+      AppErrorFeedback.showSnackBar(
+        context,
+        error: const ApiException(
+          title: 'Mode hors ligne',
+          userFriendlyMessage:
+              'Une connexion Internet est requise pour enregistrer et synchroniser un nouveau cycle ou une saisie de flux.',
+          actionSuggestion: 'Veuillez vous reconnecter au réseau avant d\'enregistrer.',
+          errorCode: 'NETWORK_OFFLINE',
+        ),
+      );
+      return;
+    }
+
     final dateStr =
         "${_selectedDate.year.toString().padLeft(4, '0')}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.day.toString().padLeft(2, '0')}";
 

@@ -5,6 +5,9 @@ import '../../../../core/theme/app_theme.dart';
 import '../../data/models/observation_models.dart';
 import '../bloc/observation_bloc.dart';
 import '../bloc/observation_event.dart';
+import '../../../../core/network/network_cubit.dart';
+import '../../../../core/error/api_exception.dart';
+import '../../../../core/error/error_feedback.dart';
 
 class ObservationEntryBottomSheet extends StatefulWidget {
   final DateTime date;
@@ -132,6 +135,24 @@ class _ObservationEntryBottomSheetState
   }
 
   void _submit() {
+    bool isOnline = true;
+    try {
+      isOnline = BlocProvider.of<NetworkCubit>(context, listen: false).state.isOnline;
+    } catch (_) {}
+    if (!isOnline) {
+      AppErrorFeedback.showSnackBar(
+        context,
+        error: const ApiException(
+          title: 'Mode hors ligne',
+          userFriendlyMessage:
+              'Une connexion Internet est requise pour synchroniser vos biomarqueurs et observations.',
+          actionSuggestion: 'Vérifiez votre connexion au réseau puis réessayez.',
+          errorCode: 'NETWORK_OFFLINE',
+        ),
+      );
+      return;
+    }
+
     final dateStr = DateFormat('yyyy-MM-dd').format(widget.date);
 
     TemperatureBasaleModel? tempModel;
@@ -193,8 +214,13 @@ class _ObservationEntryBottomSheetState
 
   @override
   Widget build(BuildContext context) {
-    final formattedDate =
-        DateFormat('EEEE d MMMM yyyy', 'fr_FR').format(widget.date);
+    String formattedDate;
+    try {
+      formattedDate =
+          DateFormat('EEEE d MMMM yyyy', 'fr_FR').format(widget.date);
+    } catch (_) {
+      formattedDate = DateFormat('yyyy-MM-dd').format(widget.date);
+    }
 
     return Container(
       height: MediaQuery.of(context).size.height * 0.82,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../../../core/error/error_feedback.dart';
 import '../bloc/auth_bloc.dart';
 import '../bloc/auth_event.dart';
 import '../bloc/auth_state.dart';
@@ -44,12 +45,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       body: BlocConsumer<AuthBloc, AuthState>(
         listener: (context, state) {
           if (state is AuthFailureState) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(state.errorMessage),
-                backgroundColor: Colors.red.shade700,
-                behavior: SnackBarBehavior.floating,
-              ),
+            AppErrorFeedback.showSnackBar(
+              context,
+              error: state.exception ?? state.errorMessage,
+              customTitle: state.title,
+              actionLabel: state.isServerWakingUp ? 'Réessayer' : null,
+              onAction: state.isServerWakingUp ? _submit : null,
             );
           }
         },
@@ -104,6 +105,14 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
+                              if (state is AuthFailureState)
+                                AppErrorBanner(
+                                  error: state.exception ?? state.errorMessage,
+                                  title: state.title,
+                                  message: state.errorMessage,
+                                  actionLabel: state.isServerWakingUp ? 'Réessayer' : null,
+                                  onAction: state.isServerWakingUp ? _submit : null,
+                                ),
                               const Icon(Icons.lock_reset_rounded, size: 64, color: primaryAmethyst),
                               const SizedBox(height: 16),
                               const Text(

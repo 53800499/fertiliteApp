@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../../../core/error/error_feedback.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../bloc/auth_bloc.dart';
 import '../bloc/auth_event.dart';
@@ -53,19 +54,21 @@ class _LoginScreenState extends State<LoginScreen> {
       body: BlocListener<AuthBloc, AuthState>(
         listener: (context, state) {
           if (state is AuthFailureState) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Row(
-                  children: [
-                    const Icon(Icons.error_outline, color: Colors.white, size: 20),
-                    const SizedBox(width: 10),
-                    Expanded(child: Text(state.errorMessage)),
-                  ],
-                ),
-                backgroundColor: const Color(0xFFE53935),
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
+            AppErrorFeedback.showSnackBar(
+              context,
+              error: state.exception ?? state.errorMessage,
+              customTitle: state.title,
+              actionLabel: state.errorCode == 'INVALID_CREDENTIALS'
+                  ? 'Réinitialiser'
+                  : (state.isServerWakingUp ? 'Réessayer' : null),
+              onAction: state.errorCode == 'INVALID_CREDENTIALS'
+                  ? () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),
+                      );
+                    }
+                  : (state.isServerWakingUp ? _submit : null),
             );
           }
         },
@@ -110,7 +113,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         textAlign: TextAlign.center,
                         style: TextStyle(fontSize: 13.5, color: AppTheme.textMuted),
                       ),
-                      const SizedBox(height: 32),
+                      const SizedBox(height: 28),
 
                       // Carte principale de connexion
                       Container(
@@ -124,6 +127,31 @@ class _LoginScreenState extends State<LoginScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
+                            // Bandeau explicatif en tête de formulaire si erreur
+                            BlocBuilder<AuthBloc, AuthState>(
+                              builder: (context, state) {
+                                if (state is AuthFailureState) {
+                                  return AppErrorBanner(
+                                    error: state.exception ?? state.errorMessage,
+                                    title: state.title,
+                                    message: state.errorMessage,
+                                    actionLabel: state.errorCode == 'INVALID_CREDENTIALS'
+                                        ? 'Mot de passe oublié ? Cliquez ici'
+                                        : (state.isServerWakingUp ? 'Réessayer' : null),
+                                    onAction: state.errorCode == 'INVALID_CREDENTIALS'
+                                        ? () {
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),
+                                            );
+                                          }
+                                        : (state.isServerWakingUp ? _submit : null),
+                                  );
+                                }
+                                return const SizedBox.shrink();
+                              },
+                            ),
+
                             // Champ Email
                             TextFormField(
                               controller: _emailController,
@@ -134,9 +162,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                 prefixIcon: Icon(Icons.mail_outline_rounded, color: AppTheme.primary, size: 20),
                               ),
                               validator: (val) {
-                                if (val == null || val.trim().isEmpty) return 'Email obligatoire';
+                                if (val == null || val.trim().isEmpty) return 'Veuillez saisir votre adresse email';
                                 if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(val.trim())) {
-                                  return 'Format d\'email non valide';
+                                  return 'Format d\'email non valide (ex: contact@exemple.com)';
                                 }
                                 return null;
                               },
@@ -160,7 +188,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                               ),
                               validator: (val) {
-                                if (val == null || val.isEmpty) return 'Mot de passe obligatoire';
+                                if (val == null || val.isEmpty) return 'Veuillez saisir votre mot de passe';
                                 return null;
                               },
                             ),

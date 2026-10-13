@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/di/service_locator.dart';
+import '../../../../core/error/api_exception.dart';
+import '../../../../core/error/error_feedback.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../auth/presentation/bloc/auth_event.dart';
@@ -49,7 +51,7 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _errorMessage = e.toString();
+          _errorMessage = ApiException.getDisplayMessage(e);
           _isLoading = false;
         });
       }
@@ -71,12 +73,10 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erreur: $e'),
-            backgroundColor: const Color(0xFFE53935),
-            behavior: SnackBarBehavior.floating,
-          ),
+        AppErrorFeedback.showSnackBar(
+          context,
+          error: e,
+          customTitle: 'Mise à jour impossible',
         );
       }
     }
@@ -96,12 +96,10 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erreur: $e'),
-            backgroundColor: const Color(0xFFE53935),
-            behavior: SnackBarBehavior.floating,
-          ),
+        AppErrorFeedback.showSnackBar(
+          context,
+          error: e,
+          customTitle: 'Déconnexion impossible',
         );
       }
     }
@@ -180,12 +178,10 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
                 }
               } catch (e) {
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Erreur: $e'),
-                      backgroundColor: const Color(0xFFE53935),
-                      behavior: SnackBarBehavior.floating,
-                    ),
+                  AppErrorFeedback.showSnackBar(
+                    context,
+                    error: e,
+                    customTitle: 'Suppression impossible',
                   );
                 }
               }
@@ -218,15 +214,9 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: AppTheme.primary))
           : _errorMessage != null
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text('Erreur: $_errorMessage'),
-                      const SizedBox(height: 12),
-                      ElevatedButton(onPressed: _loadAll, child: const Text('Réessayer')),
-                    ],
-                  ),
+              ? AppErrorEmptyView(
+                  error: _errorMessage,
+                  onRetry: _loadAll,
                 )
               : SingleChildScrollView(
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),

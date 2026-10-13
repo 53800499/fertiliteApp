@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../../../core/error/error_feedback.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../data/models/auth_models.dart';
 import '../bloc/auth_bloc.dart';
@@ -66,23 +67,34 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
     if (_selectedBirthDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Veuillez renseigner votre date de naissance (min. 12 ans)'),
-          backgroundColor: Color(0xFFE53935),
-          behavior: SnackBarBehavior.floating,
-        ),
+      AppErrorFeedback.showSnackBar(
+        context,
+        error: 'Veuillez renseigner votre date de naissance.',
+        customTitle: 'Date de naissance requise',
+      );
+      return;
+    }
+
+    final today = DateTime.now();
+    int age = today.year - _selectedBirthDate!.year;
+    if (today.month < _selectedBirthDate!.month ||
+        (today.month == _selectedBirthDate!.month && today.day < _selectedBirthDate!.day)) {
+      age--;
+    }
+    if (age < 12) {
+      AppErrorFeedback.showSnackBar(
+        context,
+        error: 'L\'application est réservée aux personnes âgées d\'au moins 12 ans conformément aux règles de protection des données de santé.',
+        customTitle: 'Âge minimum requis (12 ans)',
       );
       return;
     }
 
     if (!_consentCgu || !_consentPrivacy || !_consentHealth) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Veuillez accepter les CGU, la politique et le traitement des données de santé.'),
-          backgroundColor: Color(0xFFE53935),
-          behavior: SnackBarBehavior.floating,
-        ),
+      AppErrorFeedback.showSnackBar(
+        context,
+        error: 'Pour créer votre compte et protéger vos données de santé, l\'acceptation des CGU, de la politique de confidentialité et du traitement des données est obligatoire.',
+        customTitle: 'Consentements obligatoires requis',
       );
       return;
     }
@@ -99,7 +111,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       consents: [
         ConsentItemModel(type: 'cgu', version: '1.0', accepted: _consentCgu),
         ConsentItemModel(type: 'politique_confidentialite', version: '1.0', accepted: _consentPrivacy),
-        ConsentItemModel(type: 'traitement_donnees_sante', version: '1.0', accepted: _consentHealth),
+        ConsentItemModel(type: 'entrainement_ml', version: '1.0', accepted: _consentHealth),
         ConsentItemModel(type: 'partage_donnees_anonymisees', version: '1.0', accepted: _consentResearch),
       ],
     );
@@ -123,12 +135,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
       body: BlocListener<AuthBloc, AuthState>(
         listener: (context, state) {
           if (state is AuthFailureState) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(state.errorMessage),
-                backgroundColor: const Color(0xFFE53935),
-                behavior: SnackBarBehavior.floating,
-              ),
+            AppErrorFeedback.showSnackBar(
+              context,
+              error: state.exception ?? state.errorMessage,
+              customTitle: state.title,
+              actionLabel: state.errorCode == 'EMAIL_ALREADY_EXISTS'
+                  ? 'Se connecter'
+                  : (state.isServerWakingUp ? 'Réessayer' : null),
+              onAction: state.errorCode == 'EMAIL_ALREADY_EXISTS'
+                  ? () {
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(builder: (_) => const LoginScreen()),
+                      );
+                    }
+                  : (state.isServerWakingUp ? _submit : null),
             );
           } else if (state is AuthenticatedState) {
             Navigator.pop(context);
@@ -155,7 +176,33 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         'Vos données restent confidentielles et chiffrées au repos.',
                         style: TextStyle(fontSize: 13.5, color: AppTheme.textMuted),
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 16),
+
+                      // Bandeau d'erreur explicatif en tête de formulaire
+                      BlocBuilder<AuthBloc, AuthState>(
+                        builder: (context, state) {
+                          if (state is AuthFailureState) {
+                            return AppErrorBanner(
+                              error: state.exception ?? state.errorMessage,
+                              title: state.title,
+                              message: state.errorMessage,
+                              actionLabel: state.errorCode == 'EMAIL_ALREADY_EXISTS'
+                                  ? 'Un compte existe déjà. Se connecter ?'
+                                  : (state.isServerWakingUp ? 'Réessayer' : null),
+                              onAction: state.errorCode == 'EMAIL_ALREADY_EXISTS'
+                                  ? () {
+                                      Navigator.pushReplacement(
+                                        context,
+                                        MaterialPageRoute(builder: (_) => const LoginScreen()),
+                                      );
+                                    }
+                                  : (state.isServerWakingUp ? _submit : null),
+                            );
+                          }
+                          return const SizedBox.shrink();
+                        },
+                      ),
+                      const SizedBox(height: 12),
 
                       // Étape 1 : Identifiants
                       Container(

@@ -1,3 +1,4 @@
+import '../network/network_cubit.dart';
 import '../network/api_client.dart';
 import '../security/secure_storage_helper.dart';
 import '../../features/auth/data/datasources/auth_remote_data_source.dart';
@@ -19,10 +20,15 @@ import '../../features/observations/data/datasources/observation_remote_data_sou
 import '../../features/observations/data/repositories/observation_repository_impl.dart';
 import '../../features/observations/domain/repositories/observation_repository.dart';
 import '../../features/observations/presentation/bloc/observation_bloc.dart';
+import '../../features/fertility/data/datasources/fertility_remote_data_source.dart';
+import '../../features/fertility/data/repositories/fertility_repository_impl.dart';
+import '../../features/fertility/domain/repositories/fertility_repository.dart';
+import '../../features/fertility/presentation/bloc/fertility_bloc.dart';
 
 class ServiceLocator {
   static late final SecureStorageHelper storage;
   static late final ApiClient apiClient;
+  static late final NetworkCubit networkCubit;
 
   // Auth
   static late final IAuthRemoteDataSource authRemoteDataSource;
@@ -47,8 +53,14 @@ class ServiceLocator {
   static late final IObservationRepository observationRepository;
   static late final ObservationBloc observationBloc;
 
+  // Fertility (Module 4)
+  static late final IFertilityRemoteDataSource fertilityRemoteDataSource;
+  static late final IFertilityRepository fertilityRepository;
+  static late final FertilityBloc fertilityBloc;
+
   static void init({String? baseUrl, void Function()? onSessionExpired}) {
     storage = SecureStorageHelper();
+    networkCubit = NetworkCubit();
 
     apiClient = ApiClient(
       baseUrl: baseUrl,
@@ -57,6 +69,8 @@ class ServiceLocator {
         authBloc.add(LogoutRequestedEvent());
         onSessionExpired?.call();
       },
+      onOnline: () => networkCubit.setOnline(),
+      onOffline: () => networkCubit.setOffline(),
     );
 
     // Auth
@@ -70,12 +84,13 @@ class ServiceLocator {
     );
     authBloc = AuthBloc(authRepository: authRepository);
 
-    // Users
+    // Users (avec cache hors-ligne)
     userRemoteDataSource = UserRemoteDataSourceImpl(
       dio: apiClient.dio,
     );
     userRepository = UserRepositoryImpl(
       remoteDataSource: userRemoteDataSource,
+      storage: storage,
     );
 
     // Privacy & RGPD
@@ -86,12 +101,13 @@ class ServiceLocator {
       remoteDataSource: privacyRemoteDataSource,
     );
 
-    // Cycles (Module 2)
+    // Cycles (Module 2 avec cache hors-ligne)
     cycleRemoteDataSource = CycleRemoteDataSourceImpl(
       dio: apiClient.dio,
     );
     cycleRepository = CycleRepositoryImpl(
       remoteDataSource: cycleRemoteDataSource,
+      storage: storage,
     );
     cycleBloc = CycleBloc(cycleRepository: cycleRepository);
 
@@ -103,5 +119,14 @@ class ServiceLocator {
       remoteDataSource: observationRemoteDataSource,
     );
     observationBloc = ObservationBloc(observationRepository: observationRepository);
+
+    // Fertility (Module 4)
+    fertilityRemoteDataSource = FertilityRemoteDataSourceImpl(
+      dio: apiClient.dio,
+    );
+    fertilityRepository = FertilityRepositoryImpl(
+      remoteDataSource: fertilityRemoteDataSource,
+    );
+    fertilityBloc = FertilityBloc(fertilityRepository: fertilityRepository);
   }
 }

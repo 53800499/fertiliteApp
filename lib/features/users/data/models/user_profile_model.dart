@@ -98,6 +98,16 @@ class FullUserProfileModel {
       ),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'email': email,
+        if (dateNaissance != null) 'dateNaissance': dateNaissance,
+        'languePreferee': languePreferee,
+        'fuseauHoraire': fuseauHoraire,
+        'profil': profil.toJson(),
+        'parametresConfidentialite': parametresConfidentialite.toJson(),
+      };
 }
 
 class UpdateProfileRequestModel {

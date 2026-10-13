@@ -55,9 +55,26 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       );
       emit(AuthenticatedState(response.user));
     } on ApiException catch (e) {
-      emit(AuthFailureState(e.message));
+      emit(AuthFailureState(
+        e.userFriendlyMessage,
+        title: e.title,
+        actionSuggestion: e.actionSuggestion,
+        errorCode: e.errorCode,
+        fieldErrors: e.fieldErrors,
+        isServerWakingUp: e.isServerWakingUp,
+        exception: e,
+      ));
     } catch (e) {
-      emit(AuthFailureState('Erreur de connexion inattendue: $e'));
+      final apiEx = ApiException.from(e);
+      emit(AuthFailureState(
+        apiEx.userFriendlyMessage,
+        title: apiEx.title,
+        actionSuggestion: apiEx.actionSuggestion,
+        errorCode: apiEx.errorCode,
+        fieldErrors: apiEx.fieldErrors,
+        isServerWakingUp: apiEx.isServerWakingUp,
+        exception: apiEx,
+      ));
     }
   }
 
@@ -70,9 +87,26 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       final response = await authRepository.register(event.request);
       emit(AuthenticatedState(response.user));
     } on ApiException catch (e) {
-      emit(AuthFailureState(e.message));
+      emit(AuthFailureState(
+        e.userFriendlyMessage,
+        title: e.title,
+        actionSuggestion: e.actionSuggestion,
+        errorCode: e.errorCode,
+        fieldErrors: e.fieldErrors,
+        isServerWakingUp: e.isServerWakingUp,
+        exception: e,
+      ));
     } catch (e) {
-      emit(AuthFailureState('Erreur lors de l\'inscription: $e'));
+      final apiEx = ApiException.from(e);
+      emit(AuthFailureState(
+        apiEx.userFriendlyMessage,
+        title: apiEx.title,
+        actionSuggestion: apiEx.actionSuggestion,
+        errorCode: apiEx.errorCode,
+        fieldErrors: apiEx.fieldErrors,
+        isServerWakingUp: apiEx.isServerWakingUp,
+        exception: apiEx,
+      ));
     }
   }
 
@@ -85,9 +119,26 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       final message = await authRepository.forgotPassword(event.email);
       emit(ForgotPasswordSuccessState(message));
     } on ApiException catch (e) {
-      emit(AuthFailureState(e.message));
+      emit(AuthFailureState(
+        e.userFriendlyMessage,
+        title: e.title,
+        actionSuggestion: e.actionSuggestion,
+        errorCode: e.errorCode,
+        fieldErrors: e.fieldErrors,
+        isServerWakingUp: e.isServerWakingUp,
+        exception: e,
+      ));
     } catch (e) {
-      emit(AuthFailureState('Impossible d\'envoyer le lien: $e'));
+      final apiEx = ApiException.from(e);
+      emit(AuthFailureState(
+        apiEx.userFriendlyMessage,
+        title: apiEx.title,
+        actionSuggestion: apiEx.actionSuggestion,
+        errorCode: apiEx.errorCode,
+        fieldErrors: apiEx.fieldErrors,
+        isServerWakingUp: apiEx.isServerWakingUp,
+        exception: apiEx,
+      ));
     }
   }
 

@@ -7,7 +7,9 @@ import 'package:frontend/features/cycles/presentation/bloc/cycle_bloc.dart';
 import 'package:frontend/features/cycles/presentation/screens/calendar_screen.dart';
 import 'package:frontend/features/cycles/presentation/screens/cycle_stats_screen.dart';
 import 'package:frontend/features/observations/presentation/bloc/observation_bloc.dart';
+import 'package:frontend/features/fertility/presentation/bloc/fertility_bloc.dart';
 import '../observations/observation_bloc_test.dart';
+import '../fertility/fertility_bloc_test.dart';
 
 class MockCycleRepository implements ICycleRepository {
   @override
@@ -84,6 +86,7 @@ void main() {
     final mockRepo = MockCycleRepository();
     final bloc = CycleBloc(cycleRepository: mockRepo);
     final obsBloc = ObservationBloc(observationRepository: FakeObservationRepository());
+    final fertBloc = FertilityBloc(fertilityRepository: FakeFertilityRepository());
 
     await tester.pumpWidget(
       MaterialApp(
@@ -91,6 +94,7 @@ void main() {
           providers: [
             BlocProvider<CycleBloc>.value(value: bloc),
             BlocProvider<ObservationBloc>.value(value: obsBloc),
+            BlocProvider<FertilityBloc>.value(value: fertBloc),
           ],
           child: const CalendarScreen(),
         ),
@@ -105,6 +109,7 @@ void main() {
 
     bloc.close();
     obsBloc.close();
+    fertBloc.close();
   });
 
   testWidgets('CycleStatsScreen displays regularity hero card and metrics', (WidgetTester tester) async {

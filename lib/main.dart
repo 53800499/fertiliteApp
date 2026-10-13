@@ -8,11 +8,14 @@ import 'features/auth/presentation/bloc/auth_state.dart';
 import 'features/auth/presentation/screens/onboarding_screen.dart';
 import 'features/navigation/main_navigation_screen.dart';
 
+import 'core/network/network_cubit.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Initialisation du conteneur de services & client API
   ServiceLocator.init();
+  ServiceLocator.networkCubit.checkConnectivity(silent: true);
 
   // Vérification de la session active existante
   ServiceLocator.authBloc.add(CheckAuthStatusEvent());
@@ -25,8 +28,11 @@ class FertiliteApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider<AuthBloc>.value(
-      value: ServiceLocator.authBloc,
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider<AuthBloc>.value(value: ServiceLocator.authBloc),
+        BlocProvider<NetworkCubit>.value(value: ServiceLocator.networkCubit),
+      ],
       child: MaterialApp(
         title: 'FertiliteApp',
         debugShowCheckedModeBanner: false,

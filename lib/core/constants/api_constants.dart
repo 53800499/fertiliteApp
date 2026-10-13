@@ -4,18 +4,32 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 class ApiConstants {
   ApiConstants._();
 
-  /// URL de base automatique selon la plateforme d'exécution
-  static String get defaultBaseUrl {
+  /// URL du serveur de production en ligne (Render)
+  static const String productionBaseUrl = 'https://fertilitebackend.onrender.com/api/v1';
+
+  /// URL pour le développement local (Docker ou Node.js local)
+  static String get localBaseUrl {
     if (kIsWeb) {
-      return 'http://localhost:3000';
+      return 'http://localhost:3000/api/v1';
     }
     try {
       if (Platform.isAndroid) {
         // Alias de localhost pour l'émulateur Android
-        return 'http://10.0.2.2:3000';
+        return 'http://10.0.2.2:3000/api/v1';
       }
     } catch (_) {}
-    return 'http://localhost:3000';
+    return 'http://localhost:3000/api/v1';
+  }
+
+  /// URL de base utilisée par défaut par l'application :
+  /// 1. Variable d'environnement si passée via --dart-define=API_URL=...
+  /// 2. Serveur de production en ligne (Render) par défaut
+  static String get defaultBaseUrl {
+    const customUrl = String.fromEnvironment('API_URL');
+    if (customUrl.isNotEmpty) {
+      return customUrl;
+    }
+    return productionBaseUrl;
   }
 
   // Timeouts réseau

@@ -63,4 +63,25 @@ class SecureStorageHelper {
     final token = await getAccessToken();
     return token != null && token.isNotEmpty;
   }
+
+  // --- Offline Cache Storage ---
+  Future<void> saveCache(String key, String jsonString) async {
+    try {
+      await _storage.write(key: 'cache_$key', value: jsonString);
+    } catch (_) {}
+  }
+
+  Future<String?> getCache(String key) async {
+    try {
+      return await _storage.read(key: 'cache_$key');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> deleteCache(String key) async {
+    try {
+      await _storage.delete(key: 'cache_$key');
+    } catch (_) {}
+  }
 }

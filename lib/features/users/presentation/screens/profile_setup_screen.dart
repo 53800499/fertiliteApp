@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../core/di/service_locator.dart';
+import '../../../../core/error/error_feedback.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../data/models/user_profile_model.dart';
 
@@ -62,12 +63,10 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erreur: $e'),
-            backgroundColor: const Color(0xFFE53935),
-            behavior: SnackBarBehavior.floating,
-          ),
+        AppErrorFeedback.showSnackBar(
+          context,
+          error: e,
+          customTitle: 'Enregistrement impossible',
         );
       }
     } finally {

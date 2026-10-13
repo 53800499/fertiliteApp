@@ -70,6 +70,16 @@ class CycleModel {
     );
   }
 
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'dateDebut': dateDebut,
+        if (dateFin != null) 'dateFin': dateFin,
+        if (dureeCycleJours != null) 'dureeCycleJours': dureeCycleJours,
+        if (dureeReglesJours != null) 'dureeReglesJours': dureeReglesJours,
+        'statut': statut,
+        'joursRegles': joursRegles.map((j) => j.toJson()).toList(),
+      };
+
   bool get isEnCours => statut == 'en_cours';
 
   /// Jour du cycle actuel (1-indexed) par rapport à la date de début
@@ -213,6 +223,27 @@ class CycleStatsModel {
           .toList(),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'totalCycles': totalCycles,
+        'completedCycles': completedCycles,
+        'averageDuration': averageDuration,
+        'minDuration': minDuration,
+        'maxDuration': maxDuration,
+        'standardDeviation': standardDeviation,
+        'regularity': regularity,
+        'averagePeriodDuration': averagePeriodDuration,
+        'history': history
+            .map((h) => {
+                  'cycleId': h.cycleId,
+                  'dateDebut': h.dateDebut,
+                  if (h.dateFin != null) 'dateFin': h.dateFin,
+                  if (h.dureeCycleJours != null) 'dureeCycleJours': h.dureeCycleJours,
+                  if (h.dureeReglesJours != null) 'dureeReglesJours': h.dureeReglesJours,
+                  'statut': h.statut,
+                })
+            .toList(),
+      };
 
   String get regularityLabel {
     switch (regularity) {

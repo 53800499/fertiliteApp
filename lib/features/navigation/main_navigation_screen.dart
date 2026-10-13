@@ -1,13 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../core/di/service_locator.dart';
+import '../../core/network/network_cubit.dart';
+import '../../core/network/network_state.dart';
+import '../../core/network/widgets/offline_banner.dart';
 import '../../core/theme/app_theme.dart';
 import '../cycles/presentation/bloc/cycle_bloc.dart';
+import '../cycles/presentation/bloc/cycle_event.dart';
 import '../observations/presentation/bloc/observation_bloc.dart';
+import '../fertility/presentation/bloc/fertility_bloc.dart';
 import '../cycles/presentation/screens/calendar_screen.dart';
 import '../cycles/presentation/screens/cycle_history_screen.dart';
 import '../cycles/presentation/screens/cycle_stats_screen.dart';
 import '../users/presentation/screens/profile_screen.dart';
+import 'widgets/modern_floating_nav_bar.dart';
 
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
@@ -32,56 +38,66 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       providers: [
         BlocProvider<CycleBloc>.value(value: ServiceLocator.cycleBloc),
         BlocProvider<ObservationBloc>.value(value: ServiceLocator.observationBloc),
+        BlocProvider<FertilityBloc>.value(value: ServiceLocator.fertilityBloc),
+        BlocProvider<NetworkCubit>.value(value: ServiceLocator.networkCubit),
       ],
-      child: Scaffold(
-        body: IndexedStack(
-          index: _currentIndex,
-          children: _tabs,
-        ),
-        bottomNavigationBar: Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            border: const Border(top: BorderSide(color: AppTheme.borderLight, width: 1)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.03),
-                blurRadius: 10,
-                offset: const Offset(0, -3),
+      child: BlocListener<NetworkCubit, NetworkState>(
+        listenWhen: (prev, curr) => curr.wasOffline,
+        listener: (context, state) {
+          // Synchronisation automatique des données lors de la reconnexion
+          context.read<CycleBloc>().add(LoadCyclesEvent());
+        },
+        child: Scaffold(
+          backgroundColor: AppTheme.background,
+          extendBody: false,
+          body: Stack(
+            children: [
+              IndexedStack(
+                index: _currentIndex,
+                children: _tabs,
+              ),
+              // Bandeau flottant contextuel sans décalage de layout
+              const Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: GlobalOfflineBanner(),
               ),
             ],
           ),
-          child: NavigationBar(
-            selectedIndex: _currentIndex,
-            onDestinationSelected: (idx) => setState(() => _currentIndex = idx),
-            backgroundColor: Colors.white,
-            indicatorColor: AppTheme.primaryLight,
-            elevation: 0,
-            destinations: const [
-              NavigationDestination(
-                icon: Icon(Icons.calendar_month_outlined, color: AppTheme.textMuted),
-                selectedIcon: Icon(Icons.calendar_month_rounded, color: AppTheme.primary),
-                label: 'Calendrier',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.history_outlined, color: AppTheme.textMuted),
-                selectedIcon: Icon(Icons.history_rounded, color: AppTheme.primary),
-                label: 'Historique',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.auto_graph_outlined, color: AppTheme.textMuted),
-                selectedIcon: Icon(Icons.auto_graph_rounded, color: AppTheme.primary),
-                label: 'Statistiques',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.person_outline_rounded, color: AppTheme.textMuted),
-                selectedIcon: Icon(Icons.person_rounded, color: AppTheme.primary),
-                label: 'Profil',
-              ),
-            ],
+          bottomNavigationBar: BlocBuilder<NetworkCubit, NetworkState>(
+            builder: (context, netState) {
+              return ModernFloatingNavBar(
+                currentIndex: _currentIndex,
+                onTap: (idx) => setState(() => _currentIndex = idx),
+                isOffline: !netState.isOnline,
+                items: const [
+                  ModernNavItem(
+                    icon: Icons.calendar_month_outlined,
+                    selectedIcon: Icons.calendar_month_rounded,
+                    label: 'Calendrier',
+                  ),
+                  ModernNavItem(
+                    icon: Icons.history_outlined,
+                    selectedIcon: Icons.history_rounded,
+                    label: 'Historique',
+                  ),
+                  ModernNavItem(
+                    icon: Icons.auto_graph_outlined,
+                    selectedIcon: Icons.auto_graph_rounded,
+                    label: 'Statistiques',
+                  ),
+                  ModernNavItem(
+                    icon: Icons.person_outline_rounded,
+                    selectedIcon: Icons.person_rounded,
+                    label: 'Profil',
+                  ),
+                ],
+              );
+            },
           ),
         ),
       ),
     );
   }
 }
-
