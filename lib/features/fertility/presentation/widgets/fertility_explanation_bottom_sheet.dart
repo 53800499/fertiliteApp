@@ -130,6 +130,61 @@ class FertilityExplanationBottomSheet extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      // Bannière Bienveillante & Pédagogique avec visuel authentique
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 18),
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFAF7F9),
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(color: AppTheme.borderLight),
+                        ),
+                        child: Row(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(14),
+                              child: Image.asset(
+                                'assets/images/woman_serenity_journal.jpg',
+                                width: 56,
+                                height: 56,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) => Container(
+                                  width: 56,
+                                  height: 56,
+                                  color: AppTheme.primaryLight,
+                                  child: const Icon(Icons.spa_rounded, color: AppTheme.primary),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 14),
+                            const Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Pédagogie & Écoute de soi',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w800,
+                                      color: AppTheme.textDark,
+                                    ),
+                                  ),
+                                  SizedBox(height: 3),
+                                  Text(
+                                    'Cette estimation est un repère personnalisé basé sur vos biomarqueurs récents.',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: AppTheme.textMuted,
+                                      height: 1.35,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
                       // 1. Carte Score & Jauge
                       _buildScoreGaugeCard(prediction),
                       const SizedBox(height: 20),

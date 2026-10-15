@@ -12,6 +12,7 @@ import 'profile_setup_screen.dart';
 import '../../../../core/network/network_cubit.dart';
 import '../../../../core/widgets/offline_state_view.dart';
 import '../../../../core/widgets/modern_app_header.dart';
+import '../../../../core/widgets/natural_wellness_card.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -251,6 +252,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             ),
                           ),
                         ],
+                      ),
+                      const SizedBox(height: 20),
+
+                      // Carte Sérénité & Intimité Féminine avec visuel naturel
+                      const NaturalWellnessCard(
+                        imagePath: 'assets/images/woman_serenity_journal.jpg',
+                        title: 'Votre intimité, protégée et respectée',
+                        message: 'Vos données physiologiques restent sous votre contrôle exclusif, chiffrées localement et strictement confidentielles.',
+                        badgeText: 'Éthique & Sérénité',
                       ),
                       const SizedBox(height: 24),
 

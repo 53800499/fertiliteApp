@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/error/error_feedback.dart';
 import '../../../../core/theme/app_theme.dart';
@@ -36,6 +37,8 @@ class _LoginScreenState extends State<LoginScreen> {
               password: _passwordController.text,
             ),
           );
+    } else {
+      HapticFeedback.selectionClick();
     }
   }
 
@@ -54,7 +57,7 @@ class _LoginScreenState extends State<LoginScreen> {
       body: BlocListener<AuthBloc, AuthState>(
         listener: (context, state) {
           if (state is AuthFailureState) {
-            AppErrorFeedback.showSnackBar(
+            AppFeedback.showError(
               context,
               error: state.exception ?? state.errorMessage,
               customTitle: state.title,
@@ -70,6 +73,13 @@ class _LoginScreenState extends State<LoginScreen> {
                     }
                   : (state.isServerWakingUp ? _submit : null),
             );
+          } else if (state is AuthenticatedState) {
+            AppFeedback.showSuccess(
+              context,
+              title: 'Connexion réussie ✨',
+              message: 'Bienvenue ! Heureuse de vous retrouver sur FertiliteApp.',
+            );
+            Navigator.maybePop(context);
           }
         },
         child: SafeArea(

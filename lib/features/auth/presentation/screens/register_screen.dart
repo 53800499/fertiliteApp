@@ -67,10 +67,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
     if (_selectedBirthDate == null) {
-      AppErrorFeedback.showSnackBar(
+      AppFeedback.showWarning(
         context,
-        error: 'Veuillez renseigner votre date de naissance.',
-        customTitle: 'Date de naissance requise',
+        title: 'Date de naissance requise',
+        message: 'Veuillez renseigner votre date de naissance.',
       );
       return;
     }
@@ -82,19 +82,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
       age--;
     }
     if (age < 12) {
-      AppErrorFeedback.showSnackBar(
+      AppFeedback.showWarning(
         context,
-        error: 'L\'application est réservée aux personnes âgées d\'au moins 12 ans conformément aux règles de protection des données de santé.',
-        customTitle: 'Âge minimum requis (12 ans)',
+        title: 'Âge minimum requis (12 ans)',
+        message: 'L\'application est réservée aux personnes âgées d\'au moins 12 ans conformément aux règles de protection des données de santé.',
       );
       return;
     }
 
     if (!_consentCgu || !_consentPrivacy || !_consentHealth) {
-      AppErrorFeedback.showSnackBar(
+      AppFeedback.showWarning(
         context,
-        error: 'Pour créer votre compte et protéger vos données de santé, l\'acceptation des CGU, de la politique de confidentialité et du traitement des données est obligatoire.',
-        customTitle: 'Consentements obligatoires requis',
+        title: 'Consentements obligatoires requis',
+        message: 'Pour créer votre compte et protéger vos données de santé, l\'acceptation des CGU, de la politique de confidentialité et du traitement des données est obligatoire.',
       );
       return;
     }
@@ -135,7 +135,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       body: BlocListener<AuthBloc, AuthState>(
         listener: (context, state) {
           if (state is AuthFailureState) {
-            AppErrorFeedback.showSnackBar(
+            AppFeedback.showError(
               context,
               error: state.exception ?? state.errorMessage,
               customTitle: state.title,
@@ -152,7 +152,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   : (state.isServerWakingUp ? _submit : null),
             );
           } else if (state is AuthenticatedState) {
-            Navigator.pop(context);
+            AppFeedback.showSuccess(
+              context,
+              title: 'Compte créé avec succès 🎉',
+              message: 'Bienvenue sur FEMAX ! Votre espace santé et fertilité est prêt.',
+            );
+            Navigator.maybePop(context);
           }
         },
         child: SafeArea(

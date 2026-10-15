@@ -182,6 +182,19 @@ class CycleBloc extends Bloc<CycleEvent, CycleState> {
       if (state is CyclesLoadedState) {
         final current = state as CyclesLoadedState;
         emit(current.copyWith(stats: stats));
+      } else {
+        List<CycleModel> all = [];
+        CycleModel? active;
+        try {
+          all = await cycleRepository.getCycles();
+          active = await cycleRepository.getActiveCycle();
+        } catch (_) {}
+        emit(CyclesLoadedState(
+          activeCycle: active,
+          cycles: all,
+          selectedDate: DateTime.now(),
+          stats: stats,
+        ));
       }
     } catch (_) {}
   }

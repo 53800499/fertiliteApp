@@ -10,6 +10,10 @@ import '../widgets/edit_cycle_bottom_sheet.dart';
 import '../../../../core/network/network_cubit.dart';
 import '../../../../core/widgets/offline_state_view.dart';
 import '../../../../core/widgets/modern_app_header.dart';
+import '../../../../core/widgets/natural_wellness_card.dart';
+import '../../../../core/widgets/atmospheric_background.dart';
+import '../../../../core/widgets/glass_card.dart';
+import '../../../../core/widgets/glass_skeleton_loader.dart';
 import '../../../../core/error/error_feedback.dart';
 
 class CycleHistoryScreen extends StatefulWidget {
@@ -39,15 +43,18 @@ class _CycleHistoryScreenState extends State<CycleHistoryScreen> {
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: ModernAppHeader(
+        transparent: true,
         subtitle: 'Suivi temporel',
         title: 'Historique des Cycles',
         onRefresh: () => context.read<CycleBloc>().add(LoadCyclesEvent()),
       ),
-      body: BlocBuilder<CycleBloc, CycleState>(
-        builder: (context, state) {
-          if (state is CycleLoadingState) {
-            return const Center(child: CircularProgressIndicator(color: AppTheme.primary));
-          }
+      body: AtmosphericBackground(
+        imagePath: 'assets/images/woman_cycle_history.jpg',
+        child: BlocBuilder<CycleBloc, CycleState>(
+          builder: (context, state) {
+            if (state is CycleLoadingState) {
+              return const HistorySkeletonView();
+            }
 
           if (state is CycleFailureState) {
             final isOffline = _isOffline(context) ||
@@ -71,48 +78,12 @@ class _CycleHistoryScreenState extends State<CycleHistoryScreen> {
           final cycles = state is CyclesLoadedState ? state.cycles : <CycleModel>[];
 
           if (cycles.isEmpty) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(28),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: AppTheme.primaryLight,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.history_rounded, size: 48, color: AppTheme.primary),
-                    ),
-                    const SizedBox(height: 20),
-                    const Text(
-                      'Aucun cycle enregistré',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.textDark),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Commencez par déclarer le premier jour de vos règles pour amorcer votre historique menstruel.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 13, color: AppTheme.textMuted, height: 1.4),
-                    ),
-                    const SizedBox(height: 24),
-                    ElevatedButton.icon(
-                      onPressed: () {
-                        LogFlowBottomSheet.show(context, date: DateTime.now());
-                      },
-                      icon: const Icon(Icons.add_rounded, size: 18),
-                      label: const Text('Déclarer mes règles'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.primary,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            return NaturalWellnessEmptyView(
+              imagePath: 'assets/images/woman_cycle_history.jpg',
+              title: 'Votre carnet de cycle commence ici',
+              message: 'Prenez le temps d\'enregistrer le premier jour de vos règles. Votre corps a son propre rythme, observez-le avec sérénité.',
+              buttonLabel: 'Déclarer mes règles',
+              onAction: () => LogFlowBottomSheet.show(context, date: DateTime.now()),
             );
           }
 
@@ -129,14 +100,22 @@ class _CycleHistoryScreenState extends State<CycleHistoryScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                // Carte Bien-être avec visuel naturel d'écoute du corps
+                const NaturalWellnessCard(
+                  imagePath: 'assets/images/woman_cycle_history.jpg',
+                  title: 'La mémoire de votre rythme',
+                  message: 'Chaque cycle passé affine la précision de vos estimations et reflète vos phases naturelles.',
+                  badgeText: 'Historique & Sérénité',
+                ),
+                const SizedBox(height: 18),
+
                 // Carte de Synthèse statistique
-                Container(
+                GlassCard(
                   padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    gradient: AppTheme.softHeroGradient,
-                    borderRadius: BorderRadius.circular(24),
-                    boxShadow: AppTheme.floatingShadow,
-                  ),
+                  borderRadius: 24,
+                  gradient: AppTheme.softHeroGradient,
+                  customBorder: Border.all(color: Colors.white.withValues(alpha: 0.35), width: 1.2),
+                  customShadow: AppTheme.floatingShadow,
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
@@ -158,11 +137,12 @@ class _CycleHistoryScreenState extends State<CycleHistoryScreen> {
 
                 // Liste chronologique des cycles
                 ...cycles.map((cycle) => _buildCycleCard(cycle)),
-                const SizedBox(height: 90),
+                const SizedBox(height: 24),
               ],
             ),
           );
         },
+      ),
       ),
     );
   }
@@ -181,16 +161,16 @@ class _CycleHistoryScreenState extends State<CycleHistoryScreen> {
   Widget _buildCycleCard(CycleModel cycle) {
     final isEnCours = cycle.isEnCours;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: isEnCours ? AppTheme.primary : AppTheme.borderLight, width: isEnCours ? 1.5 : 1),
-        boxShadow: AppTheme.softShadow,
-      ),
-      child: Column(
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: GlassCard(
+        padding: const EdgeInsets.all(18),
+        borderRadius: 20,
+        customBorder: Border.all(
+          color: isEnCours ? AppTheme.primary : Colors.white.withValues(alpha: 0.85),
+          width: isEnCours ? 1.6 : 1.2,
+        ),
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
@@ -217,7 +197,7 @@ class _CycleHistoryScreenState extends State<CycleHistoryScreen> {
                   if (cycle.dureeCycleJours != null)
                     Text(
                       '${cycle.dureeCycleJours} jours',
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppTheme.textDark),
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.textDark),
                     ),
                 ],
               ),
@@ -279,6 +259,7 @@ class _CycleHistoryScreenState extends State<CycleHistoryScreen> {
               }).toList(),
             ),
         ],
+      ),
       ),
     );
   }

@@ -21,7 +21,8 @@ L'application mobile **FertiliteApp** est l'interface privilégiée et intime de
 - **Instantanée & Fluide** : Zéro temps de chargement perçu lors de la consultation ou de la saisie ;
 - **100% Fonctionnelle Hors Connexion (Offline-First)** : L'utilisatrice doit pouvoir consigner ses règles, symptômes et consulter son calendrier prévisionnel sans aucune connexion internet active ;
 - **Bienveillante & Non Alarmiste** : Clarté absolue sur le fait qu'une estimation n'est jamais un diagnostic médical ni une garantie contraceptive ;
-- **Respectueuse de l'Intimité** : Verrouillage biométrique rapide, masquage de l'écran dans le sélecteur d'applications, et conservation des données sensibles localement.
+- **Respectueuse de l'Intimité** : Verrouillage biométrique rapide, masquage de l'écran dans le sélecteur d'applications, et conservation des données sensibles localement ;
+- **Visuels & Illustrations Naturels** : Des images pertinentes représentant des femmes de façon naturelle, sans tomber dans les clichés (authenticité, inclusion, zéro infantilisation).
 
 ---
 

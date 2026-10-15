@@ -45,12 +45,18 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       body: BlocConsumer<AuthBloc, AuthState>(
         listener: (context, state) {
           if (state is AuthFailureState) {
-            AppErrorFeedback.showSnackBar(
+            AppFeedback.showError(
               context,
               error: state.exception ?? state.errorMessage,
               customTitle: state.title,
               actionLabel: state.isServerWakingUp ? 'Réessayer' : null,
               onAction: state.isServerWakingUp ? _submit : null,
+            );
+          } else if (state is ForgotPasswordSuccessState) {
+            AppFeedback.showSuccess(
+              context,
+              title: 'Email expédié 📬',
+              message: 'Un lien de réinitialisation sécurisé vous a été envoyé.',
             );
           }
         },

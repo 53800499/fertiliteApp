@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
@@ -17,6 +18,10 @@ import '../../../fertility/presentation/widgets/fertility_explanation_bottom_she
 import '../../../../core/network/network_cubit.dart';
 import '../../../../core/widgets/offline_state_view.dart';
 import '../../../../core/widgets/modern_app_header.dart';
+import '../../../../core/widgets/natural_wellness_card.dart';
+import '../../../../core/widgets/atmospheric_background.dart';
+import '../../../../core/widgets/glass_card.dart';
+import '../../../../core/widgets/glass_skeleton_loader.dart';
 import '../../../../core/error/error_feedback.dart';
 
 class CalendarScreen extends StatefulWidget {
@@ -76,15 +81,18 @@ class _CalendarScreenState extends State<CalendarScreen> {
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: ModernAppHeader(
+        transparent: true,
         subtitle: "Aujourd'hui",
         title: 'Calendrier & Fertilité',
         onRefresh: () => context.read<CycleBloc>().add(LoadCyclesEvent()),
       ),
-      body: BlocBuilder<CycleBloc, CycleState>(
-        builder: (context, state) {
-          if (state is CycleLoadingState) {
-            return const Center(child: CircularProgressIndicator(color: AppTheme.primary));
-          }
+      body: AtmosphericBackground(
+        imagePath: 'assets/images/woman_wellness_natural.jpg',
+        child: BlocBuilder<CycleBloc, CycleState>(
+          builder: (context, state) {
+            if (state is CycleLoadingState) {
+              return const CalendarSkeletonView();
+            }
 
           if (state is CycleFailureState) {
             final isOffline = _isOffline(context) ||
@@ -119,9 +127,13 @@ class _CalendarScreenState extends State<CalendarScreen> {
               children: [
                 // 1. Hero Card : Statut Physiologique du Jour
                 _buildHeroStatusCard(activeCycle, currentDay),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
 
-                // 2. Grille Calendaire Mensuelle
+                // 2. Carte Bien-être au naturel & Illustration bienveillante
+                _buildWellnessInsightCard(activeCycle, currentDay),
+                const SizedBox(height: 18),
+
+                // 3. Grille Calendaire Mensuelle
                 _buildCalendarCard(loadedState),
                 const SizedBox(height: 18),
 
@@ -146,16 +158,31 @@ class _CalendarScreenState extends State<CalendarScreen> {
                     );
                   },
                 ),
-                const SizedBox(height: 95),
+                const SizedBox(height: 24),
               ],
             ),
           );
         },
       ),
-      floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 1),
+      ),
+      floatingActionButton: Container(
+        decoration: BoxDecoration(
+          gradient: AppTheme.primaryGradient,
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: [
+            BoxShadow(
+              color: AppTheme.primary.withValues(alpha: 0.35),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
         child: FloatingActionButton.extended(
+          elevation: 0,
+          highlightElevation: 0,
+          backgroundColor: Colors.transparent,
           onPressed: () {
+            HapticFeedback.selectionClick();
             LogFlowBottomSheet.show(
               context,
               date: _selectedDate,
@@ -164,9 +191,16 @@ class _CalendarScreenState extends State<CalendarScreen> {
                   : null,
             );
           },
-          backgroundColor: AppTheme.primary,
-          icon: const Icon(Icons.add_rounded, color: Colors.white),
-          label: const Text('Saisie du jour', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          icon: const Icon(Icons.add_rounded, color: Colors.white, size: 20),
+          label: const Text(
+            'Saisie du jour',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+              fontSize: 14,
+              letterSpacing: 0.2,
+            ),
+          ),
         ),
       ),
     );
@@ -228,33 +262,50 @@ class _CalendarScreenState extends State<CalendarScreen> {
           }
         }
 
-        return Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: () => FertilityExplanationBottomSheet.show(context),
-            borderRadius: BorderRadius.circular(24),
-            child: Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                gradient: AppTheme.softHeroGradient,
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: AppTheme.floatingShadow,
-              ),
-              child: Column(
+        String wellnessTip = "Énergie équilibrée & vitalité naturelle ✨";
+        IconData wellnessIcon = Icons.auto_awesome_rounded;
+        if (phaseLabel.contains('Règles')) {
+          wellnessTip = "Prenez soin de vous : hydratation, repos & tisane 🍵";
+          wellnessIcon = Icons.spa_rounded;
+        } else if (phaseLabel.contains('ovulation') || phaseLabel.contains('fertile')) {
+          wellnessTip = "Pic de fertilité & d'éclat : votre corps est au sommet 🌸";
+          wellnessIcon = Icons.favorite_rounded;
+        } else if (phaseLabel.contains('lutéale')) {
+          wellnessTip = "Phase d'apaisement : sommeil réparateur & sérénité 🌙";
+          wellnessIcon = Icons.nightlight_round;
+        } else {
+          wellnessTip = "Vitalité en hausse : idéal pour créer et bouger ⚡";
+          wellnessIcon = Icons.bolt_rounded;
+        }
+
+        return GlassCard(
+          padding: const EdgeInsets.all(20),
+          borderRadius: 24,
+          gradient: AppTheme.softHeroGradient,
+          customBorder: Border.all(color: Colors.white.withValues(alpha: 0.35), width: 1.2),
+          customShadow: AppTheme.floatingShadow,
+          onTap: () => FertilityExplanationBottomSheet.show(context),
+          child: Column(
                 children: [
                   Row(
                     children: [
                       // Jauge circulaire avec jour du cycle
                       Container(
-                        width: 82,
-                        height: 82,
+                        width: 84,
+                        height: 84,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: Colors.white.withValues(alpha: 0.2),
+                          color: Colors.white.withValues(alpha: 0.18),
                           border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.5),
+                            color: Colors.white.withValues(alpha: 0.6),
                             width: 3,
                           ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.white.withValues(alpha: 0.15),
+                              blurRadius: 10,
+                            ),
+                          ],
                         ),
                         child: Center(
                           child: Column(
@@ -266,7 +317,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                                   fontSize: 10,
                                   color: Colors.white70,
                                   fontWeight: FontWeight.bold,
-                                  letterSpacing: 1,
+                                  letterSpacing: 1.2,
                                 ),
                               ),
                               Text(
@@ -291,7 +342,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                             Container(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 10,
-                                vertical: 3,
+                                vertical: 4,
                               ),
                               decoration: BoxDecoration(
                                 color: phaseColor.withValues(alpha: 0.35),
@@ -341,30 +392,77 @@ class _CalendarScreenState extends State<CalendarScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  // Lien explicabilité
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: const [
-                      Text(
-                        'Comprendre mon estimation',
-                        style: TextStyle(
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                          decoration: TextDecoration.underline,
+                  const SizedBox(height: 14),
+
+                  // Bannière bien-être et conseil du jour interactive
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(wellnessIcon, color: Colors.white, size: 16),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            wellnessTip,
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                          ),
                         ),
-                      ),
-                      SizedBox(width: 4),
-                      Icon(Icons.arrow_forward_ios_rounded, size: 10, color: Colors.white),
-                    ],
+                        const SizedBox(width: 4),
+                        const Icon(Icons.arrow_forward_ios_rounded, size: 10, color: Colors.white70),
+                      ],
+                    ),
                   ),
                 ],
               ),
-            ),
-          ),
         );
       },
+    );
+  }
+
+  Widget _buildWellnessInsightCard(CycleModel? cycle, int currentDay) {
+    String imagePath = 'assets/images/woman_wellness_natural.jpg';
+    String title = "Écoute du corps & Sérénité";
+    String message = "Chaque cycle est unique. Prenez ce temps pour vous reconnecter à votre rythme naturel.";
+    String badge = "Bien-être au naturel";
+
+    final dureeRegles = cycle?.dureeReglesJours ?? 5;
+    if (currentDay >= 1 && currentDay <= dureeRegles) {
+      imagePath = 'assets/images/woman_wellness_natural.jpg';
+      title = "Ralentir & s’apaiser";
+      message = "Votre corps se régénère : privilégiez la douceur, le repos et une hydratation bienfaisante.";
+      badge = "Phase Menstruelle";
+    } else if (currentDay >= 10 && currentDay <= 16) {
+      imagePath = 'assets/images/woman_wellness_natural.jpg';
+      title = "Énergie & éclat naturel";
+      message = "Période d'ouverture et d'énergie : observez vos signaux corporels avec clarté et bienveillance.";
+      badge = "Fenêtre Fertile";
+    } else if (currentDay > 16) {
+      imagePath = 'assets/images/woman_serenity_journal.jpg';
+      title = "Harmonie & recentrage";
+      message = "Phase d'apaisement : accordez-vous un moment de calme, un sommeil réparateur et de la douceur.";
+      badge = "Phase Lutéale";
+    } else {
+      imagePath = 'assets/images/woman_serenity_journal.jpg';
+      title = "Vitalité en essor";
+      message = "L'énergie s'éveille progressivement : un moment propice pour vos projets et vos ressentis.";
+      badge = "Phase Folliculaire";
+    }
+
+    return NaturalWellnessCard(
+      imagePath: imagePath,
+      title: title,
+      message: message,
+      badgeText: badge,
+      onTap: () => FertilityExplanationBottomSheet.show(context),
     );
   }
 
@@ -380,14 +478,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
       'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
     ];
 
-    return Container(
+    return GlassCard(
       padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppTheme.borderLight),
-        boxShadow: AppTheme.softShadow,
-      ),
+      borderRadius: 24,
       child: Column(
         children: [
           // En-tête mois / navigation
@@ -456,6 +549,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
               return GestureDetector(
                 onTap: () {
+                  HapticFeedback.selectionClick();
                   setState(() => _selectedDate = cellDate);
                   context.read<CycleBloc>().add(SelectDateEvent(cellDate));
                   final dateStr = DateFormat('yyyy-MM-dd').format(cellDate);
@@ -463,8 +557,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 },
                 child: Container(
                   decoration: BoxDecoration(
+                    gradient: isSelected ? AppTheme.primaryGradient : null,
                     color: isSelected
-                        ? AppTheme.primary
+                        ? null
                         : hasFlow
                             ? AppTheme.periodColor.withValues(alpha: 0.25)
                             : isOvulationEstimated
@@ -473,12 +568,19 @@ class _CalendarScreenState extends State<CalendarScreen> {
                                     ? AppTheme.primaryLight
                                     : Colors.transparent,
                     shape: BoxShape.circle,
+                    boxShadow: isSelected
+                        ? [
+                            BoxShadow(
+                              color: AppTheme.primary.withValues(alpha: 0.35),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ]
+                        : null,
                     border: Border.all(
-                      color: isToday
+                      color: isToday && !isSelected
                           ? AppTheme.primary
-                          : isSelected
-                              ? AppTheme.primary
-                              : Colors.transparent,
+                          : Colors.transparent,
                       width: 1.5,
                     ),
                   ),
@@ -534,14 +636,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
   }
 
   Widget _buildSelectedDayDetailCard(JourReglesModel? jour, CycleModel? cycle) {
-    return Container(
+    return GlassCard(
       padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppTheme.borderLight),
-        boxShadow: AppTheme.softShadow,
-      ),
+      borderRadius: 20,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -584,11 +681,40 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 AppTheme.textDark,
               ),
           ] else ...[
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 8),
-              child: Text(
-                'Aucune observation enregistrée pour cette journée. Cliquez sur "+ Saisie du jour" pour enregistrer votre flux ou ressentis.',
-                style: TextStyle(fontSize: 12.5, color: AppTheme.textMuted, height: 1.4),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryLight,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.favorite_rounded, color: AppTheme.primary, size: 20),
+                  ),
+                  const SizedBox(width: 14),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Journée non renseignée',
+                          style: TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.textDark,
+                          ),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'Enregistrez vos flux ou ressentis pour affiner vos prédictions.',
+                          style: TextStyle(fontSize: 11.5, color: AppTheme.textMuted),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
           ],

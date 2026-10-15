@@ -9,6 +9,10 @@ import '../../../../core/network/network_cubit.dart';
 import '../../../../core/widgets/offline_state_view.dart';
 import '../../../../core/widgets/offline_badge_chip.dart';
 import '../../../../core/widgets/modern_app_header.dart';
+import '../../../../core/widgets/natural_wellness_card.dart';
+import '../../../../core/widgets/atmospheric_background.dart';
+import '../../../../core/widgets/glass_card.dart';
+import '../../../../core/widgets/glass_skeleton_loader.dart';
 import '../../../../core/error/error_feedback.dart';
 
 class CycleStatsScreen extends StatefulWidget {
@@ -23,6 +27,7 @@ class _CycleStatsScreenState extends State<CycleStatsScreen> {
   void initState() {
     super.initState();
     context.read<CycleBloc>().add(LoadCycleStatsEvent());
+    context.read<CycleBloc>().add(LoadCyclesEvent());
   }
 
   bool _isOffline(BuildContext context) {
@@ -38,6 +43,7 @@ class _CycleStatsScreenState extends State<CycleStatsScreen> {
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: ModernAppHeader(
+        transparent: true,
         subtitle: 'Biométrie & Régularité',
         title: 'Statistiques & Régularité',
         onRefresh: () {
@@ -45,13 +51,15 @@ class _CycleStatsScreenState extends State<CycleStatsScreen> {
           context.read<CycleBloc>().add(LoadCyclesEvent());
         },
       ),
-      body: BlocBuilder<CycleBloc, CycleState>(
-        builder: (context, state) {
-          if (state is CycleLoadingState) {
-            return const Center(child: CircularProgressIndicator(color: AppTheme.primary));
-          }
+      body: AtmosphericBackground(
+        imagePath: 'assets/images/woman_stats_empowerment.jpg',
+        child: BlocBuilder<CycleBloc, CycleState>(
+          builder: (context, state) {
+            if (state is CycleLoadingState) {
+              return const StatsSkeletonView();
+            }
 
-          if (state is CycleFailureState) {
+            if (state is CycleFailureState) {
             final isOffline = _isOffline(context) ||
                 state.message.toLowerCase().contains('connexion') ||
                 state.message.toLowerCase().contains('hors ligne') ||
@@ -89,6 +97,14 @@ class _CycleStatsScreenState extends State<CycleStatsScreen> {
             );
           }
 
+          if (cycles.isEmpty && (stats == null || (stats.completedCycles == 0 && stats.totalCycles == 0))) {
+            return const NaturalWellnessEmptyView(
+              imagePath: 'assets/images/woman_stats_empowerment.jpg',
+              title: 'Vos statistiques s’enrichiront bientôt',
+              message: 'Dès que vos premiers cycles seront enregistrés, cette page révélera vos tendances physiologiques, votre durée moyenne et votre indice de régularité.',
+            );
+          }
+
           return SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             child: Column(
@@ -107,6 +123,15 @@ class _CycleStatsScreenState extends State<CycleStatsScreen> {
                     );
                   },
                 ),
+
+                // Carte Vitalité & Compréhension de son corps avec visuel naturel rayonnant
+                const NaturalWellnessCard(
+                  imagePath: 'assets/images/woman_stats_empowerment.jpg',
+                  title: 'Comprendre & Célébrer son corps',
+                  message: 'Les variations de durée sont naturelles. Vos statistiques vous aident à vivre chaque phase en pleine harmonie.',
+                  badgeText: 'Vitalité & Confiance',
+                ),
+                const SizedBox(height: 18),
 
                 // 1. Hero Card : Synthèse de la régularité
                 _buildHeroRegularityCard(stats),
@@ -128,6 +153,7 @@ class _CycleStatsScreenState extends State<CycleStatsScreen> {
           );
         },
       ),
+      ),
     );
   }
 
@@ -135,13 +161,12 @@ class _CycleStatsScreenState extends State<CycleStatsScreen> {
     final regularityLabel = stats?.regularityLabel ?? 'Analyse en cours';
     final isReliable = (stats?.completedCycles ?? 0) >= 2;
 
-    return Container(
+    return GlassCard(
       padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        gradient: AppTheme.softHeroGradient,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: AppTheme.floatingShadow,
-      ),
+      borderRadius: 24,
+      gradient: AppTheme.softHeroGradient,
+      customBorder: Border.all(color: Colors.white.withValues(alpha: 0.35), width: 1.2),
+      customShadow: AppTheme.floatingShadow,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -263,14 +288,9 @@ class _CycleStatsScreenState extends State<CycleStatsScreen> {
     required IconData icon,
     required Color color,
   }) {
-    return Container(
+    return GlassCard(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppTheme.borderLight),
-        boxShadow: AppTheme.softShadow,
-      ),
+      borderRadius: 20,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -324,14 +344,9 @@ class _CycleStatsScreenState extends State<CycleStatsScreen> {
     final history = stats?.history ?? [];
     final completedHistory = history.where((h) => h.dureeCycleJours != null).toList().reversed.toList();
 
-    return Container(
+    return GlassCard(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppTheme.borderLight),
-        boxShadow: AppTheme.softShadow,
-      ),
+      borderRadius: 24,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -448,13 +463,11 @@ class _CycleStatsScreenState extends State<CycleStatsScreen> {
   }
 
   Widget _buildMedicalExplanationCard() {
-    return Container(
+    return GlassCard(
       padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: AppTheme.primaryLight.withValues(alpha: 0.35),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppTheme.primary.withValues(alpha: 0.15)),
-      ),
+      borderRadius: 20,
+      surfaceColor: AppTheme.primaryLight.withValues(alpha: 0.55),
+      customBorder: Border.all(color: AppTheme.primary.withValues(alpha: 0.2)),
       child: const Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

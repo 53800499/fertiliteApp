@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import '../widgets/app_feedback.dart';
 import 'api_exception.dart';
+
+export '../widgets/app_feedback.dart';
 
 /// Composants et utilitaires pour afficher les erreurs de manière claire,
 /// bienveillante et compréhensible par l'utilisatrice
 class AppErrorFeedback {
   AppErrorFeedback._();
 
-  /// Affiche une SnackBar élégante et explicite
+  /// Affiche une SnackBar élégante et explicite (délègue vers AppFeedback)
   static void showSnackBar(
     BuildContext context, {
     required dynamic error,
@@ -17,112 +20,34 @@ class AppErrorFeedback {
     VoidCallback? onAction,
     Duration duration = const Duration(seconds: 5),
   }) {
-    final apiException = ApiException.from(error);
-    final title = customTitle ?? apiException.title;
-    final message = customMessage ?? apiException.userFriendlyMessage;
-    final suggestion = apiException.actionSuggestion;
-
-    final iconData = _resolveIcon(apiException.errorCode);
-    final isColdStart = apiException.isServerWakingUp;
-
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        duration: isColdStart ? const Duration(seconds: 8) : duration,
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        backgroundColor: const Color(0xFF2C2438), // Fond sombre améthyste profond et apaisant
-        elevation: 6,
-        content: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: isColdStart ? Colors.amber.withValues(alpha: 0.2) : const Color(0xFFEF5350).withValues(alpha: 0.2),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                iconData,
-                color: isColdStart ? Colors.amberAccent : const Color(0xFFFF8A80),
-                size: 22,
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14.5,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    message,
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      color: Colors.white.withValues(alpha: 0.9),
-                      height: 1.3,
-                    ),
-                  ),
-                  if (suggestion.isNotEmpty && !message.contains(suggestion)) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      '💡 $suggestion',
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        fontStyle: FontStyle.italic,
-                        color: Colors.white.withValues(alpha: 0.75),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ],
-        ),
-        action: (actionLabel != null && onAction != null)
-            ? SnackBarAction(
-                label: actionLabel,
-                textColor: AppTheme.accentRose,
-                onPressed: onAction,
-              )
-            : null,
-      ),
+    AppFeedback.showError(
+      context,
+      error: error,
+      customTitle: customTitle,
+      customMessage: customMessage,
+      actionLabel: actionLabel,
+      onAction: onAction,
+      duration: duration,
     );
   }
 
-  static IconData _resolveIcon(String errorCode) {
-    switch (errorCode) {
-      case 'SERVER_WAKING_UP':
-        return Icons.cloud_sync_rounded;
-      case 'NETWORK_OFFLINE':
-        return Icons.wifi_off_rounded;
-      case 'INVALID_CREDENTIALS':
-        return Icons.lock_outline_rounded;
-      case 'EMAIL_ALREADY_EXISTS':
-        return Icons.account_circle_outlined;
-      case 'AUTH_UNDERAGE':
-        return Icons.cake_rounded;
-      case 'AUTH_CONSENTS_REQUIRED':
-        return Icons.assignment_late_outlined;
-      case 'RATE_LIMITED':
-        return Icons.hourglass_top_rounded;
-      case 'ACCOUNT_SUSPENDED':
-        return Icons.block_rounded;
-      case 'AUTH_SESSION_EXPIRED':
-        return Icons.timer_outlined;
-      default:
-        return Icons.info_outline_rounded;
-    }
+  /// Affiche une SnackBar de succès valorisante
+  static void showSuccess(
+    BuildContext context, {
+    required String message,
+    String title = 'Succès',
+    String? actionLabel,
+    VoidCallback? onAction,
+    Duration duration = const Duration(seconds: 4),
+  }) {
+    AppFeedback.showSuccess(
+      context,
+      message: message,
+      title: title,
+      actionLabel: actionLabel,
+      onAction: onAction,
+      duration: duration,
+    );
   }
 }
 

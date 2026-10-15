@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../network/network_cubit.dart';
@@ -11,6 +12,8 @@ class ModernAppHeader extends StatelessWidget implements PreferredSizeWidget {
   final List<Widget>? actions;
   final VoidCallback? onRefresh;
   final bool showNetworkStatus;
+  final bool transparent;
+  final Color? backgroundColor;
 
   const ModernAppHeader({
     super.key,
@@ -20,6 +23,8 @@ class ModernAppHeader extends StatelessWidget implements PreferredSizeWidget {
     this.actions,
     this.onRefresh,
     this.showNetworkStatus = true,
+    this.transparent = false,
+    this.backgroundColor,
   });
 
   @override
@@ -27,11 +32,14 @@ class ModernAppHeader extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
+    Widget header = Container(
+      decoration: BoxDecoration(
+        color: backgroundColor ?? (transparent ? Colors.white.withValues(alpha: 0.82) : Colors.white),
         border: Border(
-          bottom: BorderSide(color: AppTheme.borderLight, width: 1.0),
+          bottom: BorderSide(
+            color: transparent ? Colors.white.withValues(alpha: 0.6) : AppTheme.borderLight,
+            width: 1.0,
+          ),
         ),
       ),
       child: SafeArea(
@@ -101,6 +109,17 @@ class ModernAppHeader extends StatelessWidget implements PreferredSizeWidget {
         ),
       ),
     );
+
+    if (transparent) {
+      return ClipRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 14.0, sigmaY: 14.0),
+          child: header,
+        ),
+      );
+    }
+
+    return header;
   }
 
   Widget _buildNetworkBadge(BuildContext context) {

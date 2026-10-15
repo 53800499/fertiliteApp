@@ -57,3 +57,7 @@ L'application Flutter doit respecter les spécifications suivantes :
 ### 2.3 Sécurité Mobile
 - **REQ-MOB-17 (Verrouillage biométrique)** : Option dans les paramètres pour exiger Face ID / Touch ID / Empreinte digitale lors du lancement de l'application ou après 1 minute d'inactivité.
 - **REQ-MOB-18 (Masquage sélecteur d'apps)** : Activation du floutage de l'écran lors du passage de l'application en arrière-plan pour empêcher la visualisation indiscrète des données de cycle dans le sélecteur de tâches.
+
+### 2.4 Identité Visuelle, Illustrations & Direction Artistique
+- **REQ-MOB-19 (Illustrations & Visuels naturels)** : Illustrations et visuels : des images pertinentes représentant des femmes de façon naturelle, sans tomber dans les clichés (authenticité des attitudes, diversité des âges et profils, refus de l'imagerie infantilisante ou hyper-sexualisée, palette chromatique apaisante).
+

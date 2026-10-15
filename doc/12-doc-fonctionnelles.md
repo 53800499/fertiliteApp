@@ -62,3 +62,26 @@ L'expression verbale de l'application façonne la confiance et évite toute dét
 | « Vous ovulez aujourd'hui avec certitude. » | « Votre ovulation est estimée autour de cette date. » |
 | « Cycle anormal détecté ! » | « Une variabilité est constatée sur ce cycle par rapport à votre moyenne. » |
 | « Prédiction garantie. » | « Estimation basée sur l'analyse de vos 5 derniers cycles. » |
+
+---
+
+## 4. Illustrations & Visuels
+
+> **Illustrations et visuels** : des images pertinentes représentant des femmes de façon naturelle, sans tomber dans les clichés.
+
+### 4.1 Principes Directeurs
+- **Authenticité & Réalisme** : Représenter les femmes dans des postures naturelles et apaisantes de la vie quotidienne (écoute de son corps, repos, bien-être, travail, sérénité), loin des poses figées ou hyper-médicalisées.
+- **Diversité & Inclusivité** : Refléter la pluralité des profils, carnations et morphologies, en résonance directe avec les personas cibles de l'application (Amina, Khadija, Fatim).
+- **Zéro Cliché & Zéro Infantilisation** :
+  - Proscrire les clichés désuets (surabondance de rose fuchsia, cœurs caricaturaux, esthétique kitsch) ;
+  - Proscrire la dramatisation anxiogène de la douleur ou des symptômes menstruels ;
+  - Prôner une approche éditoriale sobre, élégante, scientifique et bienveillante.
+
+### 4.2 Ligne Graphique des Visuels
+- **Style artistique** : Illustrations vectorielles minimalistes, aquarelles numériques épurées ou photographies documentaires chaleureuses avec une lumière douce et naturelle.
+- **Intégration chromatique** : Respect strict de la palette harmonique (améthyste, lilas `#9D71E8`, pêche `#FFAB91`, sauge `#6BAA75` et fond crème `#FAF8F5`).
+- **Cas d'usage applicatifs** :
+  1. *Écrans d'Onboarding* : Présentation des 3 piliers (Estimer, Expliquer, Informer sans garantir) avec des scènes de vie inspirantes ;
+  2. *États Vides (Empty States)* : Illustrations bienveillantes invitant à la première saisie de cycle sans sentiment de vide clinique ;
+  3. *Pédagogie & Explicabilité* : Schémas corporels élégants et éducatifs pour la section « Pourquoi cette estimation ? ».
+
