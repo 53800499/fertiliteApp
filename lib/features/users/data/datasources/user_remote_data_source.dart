@@ -31,11 +31,16 @@ class UserRemoteDataSourceImpl implements IUserRemoteDataSource {
         ApiConstants.userProfile,
         data: request.toJson(),
       );
-      // Le backend renvoie le profil mis à jour
+      // Si la réponse contient le profil complet avec la clé 'profil'
       if (response.data is Map<String, dynamic>) {
-        return FullUserProfileModel.fromJson(response.data as Map<String, dynamic>);
+        final data = response.data as Map<String, dynamic>;
+        if (data.containsKey('profil') && data['profil'] is Map<String, dynamic>) {
+          return FullUserProfileModel.fromJson(data);
+        }
       }
-      return getProfile();
+      // Si le backend distant a renvoyé l'entité ProfilUtilisateur directement,
+      // on recharge le profil complet pour garantir l'intégrité de toutes les données
+      return await getProfile();
     } on DioException catch (e) {
       throw ApiException.fromDioError(e);
     }

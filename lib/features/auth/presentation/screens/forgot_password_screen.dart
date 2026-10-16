@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/error/error_feedback.dart';
+import '../../../../core/widgets/modern_app_header.dart';
 import '../bloc/auth_bloc.dart';
 import '../bloc/auth_event.dart';
 import '../bloc/auth_state.dart';
@@ -36,11 +37,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFFAF7F9),
-      appBar: AppBar(
-        title: const Text('Mot de passe oublié', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        foregroundColor: const Color(0xFF37474F),
+      appBar: const ModernAppHeader(
+        title: 'Mot de passe oublié',
+        subtitle: 'Sécurité de compte',
+        showNetworkStatus: false,
       ),
       body: BlocConsumer<AuthBloc, AuthState>(
         listener: (context, state) {

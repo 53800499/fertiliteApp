@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/di/service_locator.dart';
@@ -33,10 +34,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _loadProfile() async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
+    // 1. Chargement instantané depuis le cache local s'il existe
+    if (_profile == null) {
+      try {
+        final cached = await ServiceLocator.storage.getCache('cached_user_profile');
+        if (cached != null && cached.isNotEmpty && mounted) {
+          final cachedModel = FullUserProfileModel.fromJson(
+            jsonDecode(cached) as Map<String, dynamic>,
+          );
+          setState(() {
+            _profile = cachedModel;
+            _isLoading = false;
+          });
+        }
+      } catch (_) {}
+    }
+
+    // 2. Si pas de cache, on affiche l'état de chargement
+    if (_profile == null) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
+    }
 
     try {
       final data = await ServiceLocator.userRepository.getProfile();
@@ -44,14 +64,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
         setState(() {
           _profile = data;
           _isLoading = false;
+          _errorMessage = null;
         });
       }
     } catch (e) {
       if (mounted) {
-        setState(() {
-          _errorMessage = ApiException.getDisplayMessage(e);
-          _isLoading = false;
-        });
+        // Si on a déjà des données en cache, on ne bloque pas l'écran
+        if (_profile == null) {
+          setState(() {
+            _errorMessage = ApiException.getDisplayMessage(e);
+            _isLoading = false;
+          });
+        }
       }
     }
   }
@@ -85,7 +109,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: AppTheme.primary))
+          ? _buildProfileSkeleton()
           : _errorMessage != null
               ? Builder(
                   builder: (context) {
@@ -103,11 +127,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     );
                   },
                 )
-              : SingleChildScrollView(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
+              : RefreshIndicator(
+                  color: AppTheme.primary,
+                  backgroundColor: Colors.white,
+                  displacement: 40,
+                  strokeWidth: 2.5,
+                  onRefresh: _loadProfile,
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(
+                      parent: BouncingScrollPhysics(),
+                    ),
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
                       // Bannière Hero Utilisatrice
                       Container(
                         padding: const EdgeInsets.all(22),
@@ -314,19 +347,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ],
                   ),
                 ),
+              ),
     );
   }
 
   String _formatObjective(String? obj) {
     switch (obj) {
+      case 'planifier_grossesse':
       case 'concevoir':
-        return 'Conception';
+        return 'Conception 👶';
+      case 'suivi_cycle':
       case 'suivre_cycle':
-        return 'Suivi du cycle';
+        return 'Suivi du cycle 📅';
+      case 'eviter_grossesse':
       case 'contraception_naturelle':
-        return 'Observation';
+        return 'Observation & Prévention 🛡️';
+      case 'comprendre_corps':
+        return 'Écoute & Hormones 🌿';
       default:
-        return 'Suivi';
+        return 'Suivi général';
     }
   }
 
@@ -413,6 +452,63 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppTheme.textLight),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildProfileSkeleton() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        children: [
+          const SizedBox(height: 12),
+          // Avatar squelette
+          Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              color: AppTheme.primaryLight.withValues(alpha: 0.25),
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Container(
+            width: 140,
+            height: 16,
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            width: 200,
+            height: 12,
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.04),
+              borderRadius: BorderRadius.circular(6),
+            ),
+          ),
+          const SizedBox(height: 24),
+          // Cartes profil squelette
+          Container(
+            height: 120,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Container(
+            height: 160,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
+            ),
+          ),
+        ],
       ),
     );
   }

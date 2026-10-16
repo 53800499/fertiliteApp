@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../../../../core/di/service_locator.dart';
 import '../../../../core/error/error_feedback.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/modern_app_header.dart';
+import '../../../cycles/data/models/cycle_models.dart';
+import '../../../cycles/presentation/bloc/cycle_event.dart';
+import '../../../fertility/presentation/bloc/fertility_event.dart';
 import '../../data/models/user_profile_model.dart';
 
 class ProfileSetupScreen extends StatefulWidget {
@@ -17,10 +22,36 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   final _prenomController = TextEditingController();
   int _cycleDuration = 28;
   int _flowDuration = 5;
-  String _objective = 'concevoir';
+  String _objective = 'planifier_grossesse';
   bool _irregular = false;
   DateTime? _lastPeriodDate;
   bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadExistingProfile();
+  }
+
+  Future<void> _loadExistingProfile() async {
+    try {
+      final full = await ServiceLocator.userRepository.getProfile();
+      if (!mounted) return;
+      final p = full.profil;
+      setState(() {
+        if (p.prenom != null && p.prenom!.isNotEmpty) {
+          _prenomController.text = p.prenom!;
+        }
+        _cycleDuration = p.dureeMoyenneCycle.clamp(20, 45);
+        _flowDuration = p.dureeMoyenneRegles.clamp(2, 10);
+        _objective = p.objectifPrincipal;
+        _irregular = p.irregulariteDeclaree;
+        if (p.dateDernieresReglesConnues != null) {
+          _lastPeriodDate = DateTime.tryParse(p.dateDernieresReglesConnues!);
+        }
+      });
+    } catch (_) {}
+  }
 
   @override
   void dispose() {
@@ -44,17 +75,51 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   Future<void> _saveAndContinue() async {
     setState(() => _isSaving = true);
     try {
+      final lastPeriodStr = _lastPeriodDate != null
+          ? DateFormat('yyyy-MM-dd').format(_lastPeriodDate!)
+          : null;
+
       final req = UpdateProfileRequestModel(
         prenom: _prenomController.text.trim().isNotEmpty ? _prenomController.text.trim() : null,
         dureeMoyenneCycle: _cycleDuration,
         dureeMoyenneRegles: _flowDuration,
         objectifPrincipal: _objective,
         irregulariteDeclaree: _irregular,
+        dateDernieresReglesConnues: lastPeriodStr,
       );
 
       await ServiceLocator.userRepository.updateProfile(req);
 
+      // Si l'utilisatrice a choisi une date de dernières règles et qu'aucun cycle actif n'existe, on initialise le cycle
+      if (_lastPeriodDate != null) {
+        try {
+          final activeCycle = await ServiceLocator.cycleRepository.getActiveCycle();
+          if (activeCycle == null) {
+            await ServiceLocator.cycleRepository.startCycle(StartCycleRequestModel(
+              dateDebut: lastPeriodStr!,
+              intensiteFlux: 'moyen',
+            ));
+          }
+        } catch (_) {}
+      }
+
+      // Recalcul immédiat du Fertility Engine
+      try {
+        await ServiceLocator.fertilityRepository.recalculateFertility();
+      } catch (_) {}
+
+      // Notification de tous les blocs pour mise à jour synchrone de toutes les pages
+      ServiceLocator.cycleBloc.add(LoadCyclesEvent());
+      ServiceLocator.fertilityBloc.add(const LoadCurrentFertilityEvent());
+      final now = DateTime.now();
+      ServiceLocator.fertilityBloc.add(LoadMonthCalendarEvent(year: now.year, month: now.month));
+
       if (mounted) {
+        AppFeedback.showSuccess(
+          context,
+          title: 'Algorithme calibré ✨',
+          message: 'Vos prédictions et repères ont été adaptés à vos paramètres.',
+        );
         if (widget.onCompleted != null) {
           widget.onCompleted!();
         } else {
@@ -78,17 +143,16 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.background,
-      appBar: AppBar(
-        title: const Text('Assistant de cycle', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: AppTheme.textDark)),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: AppTheme.textDark),
-          onPressed: () => Navigator.maybePop(context),
-        ),
+      appBar: const ModernAppHeader(
+        title: 'Assistant de cycle',
+        subtitle: 'Personnalisation',
+        showNetworkStatus: false,
       ),
       body: SafeArea(
         child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(
+            parent: BouncingScrollPhysics(),
+          ),
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 480),
@@ -147,11 +211,35 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                     children: [
                       const Text('Votre objectif principal', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppTheme.textDark)),
                       const SizedBox(height: 14),
-                      _buildObjectiveTile('concevoir', 'Concevoir un enfant', 'Identifier vos jours les plus favorables', Icons.child_care_rounded),
+                      _buildObjectiveTile(
+                        'planifier_grossesse',
+                        'Concevoir un enfant',
+                        'Identifier les jours de fertilité maximale & cibler l\'ovulation',
+                        Icons.child_care_rounded,
+                      ),
                       const SizedBox(height: 10),
-                      _buildObjectiveTile('suivre_cycle', 'Suivre mon cycle sans projet', 'Prévoir vos règles et comprendre vos symptômes', Icons.calendar_today_rounded),
+                      _buildObjectiveTile(
+                        'suivi_cycle',
+                        'Suivre mon cycle & mes règles',
+                        'Prévoir l\'arrivée des règles, le SPM et comprendre vos symptômes',
+                        Icons.calendar_today_rounded,
+                      ),
                       const SizedBox(height: 10),
-                      _buildObjectiveTile('contraception_naturelle', 'Observation & Méthode naturelle', 'Comprendre les signaux corporels sans pression', Icons.spa_rounded),
+                      _buildObjectiveTile(
+                        'eviter_grossesse',
+                        'Observation & Méthode naturelle',
+                        'Connaître votre zone de prudence et les signaux corporels',
+                        Icons.spa_rounded,
+                      ),
+                      const SizedBox(height: 10),
+                      _buildObjectiveTile(
+                        'comprendre_corps',
+                        'Comprendre mon corps & mes hormones',
+                        'Analyser les 4 phases physiologiques et leurs impacts',
+                        Icons.psychology_rounded,
+                      ),
+                      const SizedBox(height: 14),
+                      _buildObjectiveReactionCard(),
                     ],
                   ),
                 ),
@@ -188,7 +276,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                         ],
                       ),
                       Slider(
-                        value: _cycleDuration.toDouble(),
+                        value: _cycleDuration.toDouble().clamp(20.0, 45.0),
                         min: 20,
                         max: 45,
                         divisions: 25,
@@ -213,7 +301,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                         ],
                       ),
                       Slider(
-                        value: _flowDuration.toDouble(),
+                        value: _flowDuration.toDouble().clamp(2.0, 10.0),
                         min: 2,
                         max: 10,
                         divisions: 8,
@@ -383,6 +471,186 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
             if (isSelected) const Icon(Icons.check_circle_rounded, color: AppTheme.primary, size: 20),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildObjectiveReactionCard() {
+    Color cardColor;
+    Color accentColor;
+    IconData headerIcon;
+    String title;
+    String subtitle;
+    List<Map<String, String>> points;
+
+    switch (_objective) {
+      case 'planifier_grossesse':
+      case 'concevoir':
+        cardColor = const Color(0xFFFFF0F5);
+        accentColor = AppTheme.accentRose;
+        headerIcon = Icons.favorite_rounded;
+        title = 'Mode Projet Bébé & Conception';
+        subtitle = 'FertiliteApp oriente ses algorithmes pour maximiser vos chances :';
+        points = [
+          {
+            'title': 'Ciblage des jours clés',
+            'desc': 'Mise en avant immédiate de votre pic de fertilité (J-2, J-1 et jour d\'ovulation).',
+          },
+          {
+            'title': 'Biomarqueurs décisifs',
+            'desc': 'Vos tests d\'ovulation (LH) et votre glaire cervicale ajustent en temps réel le pic d\'ovulation.',
+          },
+          {
+            'title': 'Conseils de synchronisation',
+            'desc': 'Repères sans stress pour planifier vos moments d\'intimité en pleine harmonie.',
+          },
+        ];
+        break;
+
+      case 'eviter_grossesse':
+      case 'contraception_naturelle':
+        cardColor = const Color(0xFFF0FDF4);
+        accentColor = Colors.teal.shade700;
+        headerIcon = Icons.shield_rounded;
+        title = 'Mode Observation & Prudence';
+        subtitle = 'FEMAX applique une marge de sécurité accrue pour différer naturellement :';
+        points = [
+          {
+            'title': 'Zone de précaution active',
+            'desc': 'Alerte visuelle claire et sans ambiguïté dès que la fenêtre fertile est susceptible d\'être ouverte.',
+          },
+          {
+            'title': 'Statut de sécurité validé',
+            'desc': 'Distingue nettement les phases de risque de fécondation des périodes d\'infertilité confirmées.',
+          },
+          {
+            'title': 'Suivi de la glaire cervicale',
+            'desc': 'Incitation quotidienne à observer les sécrétions pour détecter l\'ouverture précoce du col.',
+          },
+        ];
+        break;
+
+      case 'comprendre_corps':
+        cardColor = const Color(0xFFF5F3FF);
+        accentColor = Colors.purple.shade700;
+        headerIcon = Icons.auto_awesome_rounded;
+        title = 'Mode Saisons Hormonales & Vitalité';
+        subtitle = 'FEMAX décrypte l\'impact de vos hormones sur votre bien-être :';
+        points = [
+          {
+            'title': 'Les 4 saisons du cycle',
+            'desc': 'Suivi pas à pas des phases Menstruelle (reset), Folliculaire (essor), Ovulatoire (éclat) et Lutéale (calme).',
+          },
+          {
+            'title': 'Humeur, énergie & SPM',
+            'desc': 'Explications bienveillantes reliant votre forme physique et mentale aux niveaux d\'œstrogènes et de progestérone.',
+          },
+          {
+            'title': 'Rythme holistique',
+            'desc': 'Conseils en alimentation, créativité et repos adaptés à la saison physiologique que vous traversez.',
+          },
+        ];
+        break;
+
+      case 'suivi_cycle':
+      case 'suivre_cycle':
+      default:
+        cardColor = const Color(0xFFF8FAFC);
+        accentColor = AppTheme.primary;
+        headerIcon = Icons.calendar_today_rounded;
+        title = 'Mode Prévision & Suivi de Cycle';
+        subtitle = 'FEMAX vous apporte sérénité et clarté sur vos repères :';
+        points = [
+          {
+            'title': 'Compte à rebours des règles',
+            'desc': 'Prévision précise de l\'arrivée des prochaines menstruations et alerte douce en cas de retard.',
+          },
+          {
+            'title': 'Anticipation du SPM',
+            'desc': 'Conseils préventifs quelques jours avant les règles pour apaiser les crampes et l\'inconfort.',
+          },
+          {
+            'title': 'Historique & régularité',
+            'desc': 'Statistiques complètes sur la durée de vos cycles pour mieux connaître votre corps au fil des mois.',
+          },
+        ];
+        break;
+    }
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: accentColor.withValues(alpha: 0.35), width: 1.2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: accentColor.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(headerIcon, color: accentColor, size: 18),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: accentColor,
+                      ),
+                    ),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ...points.map(
+            (p) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 3.5),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.check_circle_rounded, size: 14, color: accentColor),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: RichText(
+                      text: TextSpan(
+                        style: const TextStyle(fontSize: 11.5, color: AppTheme.textDark, height: 1.3),
+                        children: [
+                          TextSpan(
+                            text: '${p['title']} : ',
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          TextSpan(
+                            text: p['desc'],
+                            style: const TextStyle(color: AppTheme.textMuted),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

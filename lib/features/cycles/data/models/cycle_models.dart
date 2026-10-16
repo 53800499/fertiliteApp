@@ -16,12 +16,18 @@ class JourReglesModel {
   });
 
   factory JourReglesModel.fromJson(Map<String, dynamic> json) {
+    String rawDate = (json['date'] as String? ?? '').trim();
+    if (rawDate.length >= 10) {
+      rawDate = rawDate.substring(0, 10);
+    }
     return JourReglesModel(
       id: json['id'] as String? ?? '',
-      cycleId: json['cycleId'] as String? ?? '',
-      date: json['date'] as String? ?? '',
-      intensiteFlux: json['intensiteFlux'] as String? ?? 'moyen',
-      douleurNiveau: (json['douleurNiveau'] as num?)?.toInt(),
+      cycleId: (json['cycleId'] ?? json['cycle_id']) as String? ?? '',
+      date: rawDate,
+      intensiteFlux: (json['intensiteFlux'] ?? json['intensite_flux']) as String? ?? 'moyen',
+      douleurNiveau: (json['douleurNiveau'] ?? json['douleur_niveau']) is num
+          ? ((json['douleurNiveau'] ?? json['douleur_niveau']) as num).toInt()
+          : int.tryParse((json['douleurNiveau'] ?? json['douleur_niveau'])?.toString() ?? ''),
       notes: json['notes'] as String?,
     );
   }
@@ -56,14 +62,27 @@ class CycleModel {
   });
 
   factory CycleModel.fromJson(Map<String, dynamic> json) {
-    final rawJours = json['joursRegles'] as List<dynamic>? ?? [];
+    String rawDebut = ((json['dateDebut'] ?? json['date_debut']) as String? ?? '').trim();
+    if (rawDebut.length >= 10) rawDebut = rawDebut.substring(0, 10);
+
+    String? rawFin = (json['dateFin'] ?? json['date_fin']) as String?;
+    if (rawFin != null) {
+      rawFin = rawFin.trim();
+      if (rawFin.length >= 10) rawFin = rawFin.substring(0, 10);
+    }
+
+    final rawJours = (json['joursRegles'] ?? json['jours_regles']) as List<dynamic>? ?? [];
     return CycleModel(
       id: json['id'] as String? ?? '',
-      dateDebut: json['dateDebut'] as String? ?? '',
-      dateFin: json['dateFin'] as String?,
-      dureeCycleJours: (json['dureeCycleJours'] as num?)?.toInt(),
-      dureeReglesJours: (json['dureeReglesJours'] as num?)?.toInt(),
-      statut: json['statut'] as String? ?? 'en_cours',
+      dateDebut: rawDebut,
+      dateFin: rawFin,
+      dureeCycleJours: (json['dureeCycleJours'] ?? json['duree_cycle_jours']) is num
+          ? ((json['dureeCycleJours'] ?? json['duree_cycle_jours']) as num).toInt()
+          : int.tryParse((json['dureeCycleJours'] ?? json['duree_cycle_jours'])?.toString() ?? ''),
+      dureeReglesJours: (json['dureeReglesJours'] ?? json['duree_regles_jours']) is num
+          ? ((json['dureeReglesJours'] ?? json['duree_regles_jours']) as num).toInt()
+          : int.tryParse((json['dureeReglesJours'] ?? json['duree_regles_jours'])?.toString() ?? ''),
+      statut: (json['statut'] ?? json['status']) as String? ?? 'en_cours',
       joursRegles: rawJours
           .map((j) => JourReglesModel.fromJson(j as Map<String, dynamic>))
           .toList(),

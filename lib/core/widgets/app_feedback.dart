@@ -51,7 +51,9 @@ class AppFeedback {
   /// Affiche une notification d'erreur compréhensible avec suggestion d'action
   static void showError(
     BuildContext context, {
-    required dynamic error,
+    dynamic error,
+    String? title,
+    String? message,
     String? customTitle,
     String? customMessage,
     String? actionLabel,
@@ -60,9 +62,10 @@ class AppFeedback {
   }) {
     HapticFeedback.mediumImpact();
 
-    final apiException = ApiException.from(error);
-    final title = customTitle ?? apiException.title;
-    final message = customMessage ?? apiException.userFriendlyMessage;
+    final effectiveError = error ?? customMessage ?? message ?? 'Une erreur est survenue';
+    final apiException = ApiException.from(effectiveError);
+    final resolvedTitle = customTitle ?? title ?? apiException.title;
+    final resolvedMessage = customMessage ?? message ?? apiException.userFriendlyMessage;
     final suggestion = apiException.actionSuggestion;
     final iconData = _resolveErrorIcon(apiException.errorCode);
     final isColdStart = apiException.isServerWakingUp;
@@ -70,8 +73,8 @@ class AppFeedback {
     _showToast(
       context,
       type: isColdStart ? FeedbackType.warning : FeedbackType.error,
-      title: title,
-      message: message,
+      title: resolvedTitle,
+      message: resolvedMessage,
       suggestion: suggestion,
       icon: isColdStart ? Icons.cloud_sync_rounded : iconData,
       accentColor: isColdStart
@@ -252,6 +255,149 @@ class AppFeedback {
         );
       },
     );
+  }
+
+  // ==========================================
+  // 5. MODALE DE CONFIRMATION ERGONOMIQUE
+  // ==========================================
+
+  /// Affiche une modale de confirmation ergonomique avant une action sensible ou destructive
+  /// (ex: supprimer un cycle, déclarer un nouveau cycle, abandonner une saisie)
+  static Future<bool> showConfirmationDialog(
+    BuildContext context, {
+    required String title,
+    required String message,
+    String confirmLabel = 'Confirmer',
+    String cancelLabel = 'Annuler',
+    IconData icon = Icons.help_outline_rounded,
+    Color? confirmColor,
+    bool isDestructive = false,
+  }) async {
+    HapticFeedback.mediumImpact();
+
+    final Color actionColor = confirmColor ??
+        (isDestructive ? const Color(0xFFE11D48) : AppTheme.primary);
+
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Container(
+            padding: const EdgeInsets.all(26),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: [
+                BoxShadow(
+                  color: actionColor.withValues(alpha: 0.15),
+                  blurRadius: 30,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Halo avec icône thématique
+                Container(
+                  width: 74,
+                  height: 74,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: actionColor.withValues(alpha: 0.12),
+                  ),
+                  child: Icon(
+                    icon,
+                    color: actionColor,
+                    size: 38,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 18.5,
+                    fontWeight: FontWeight.w800,
+                    color: AppTheme.textDark,
+                    letterSpacing: -0.3,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  message,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 13.5,
+                    color: AppTheme.textMuted,
+                    height: 1.45,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                // Deux boutons ergonomiques (Annuler / Confirmer)
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () {
+                          HapticFeedback.selectionClick();
+                          Navigator.of(ctx).pop(false);
+                        },
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppTheme.textMuted,
+                          side: const BorderSide(color: AppTheme.borderLight, width: 1.5),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        child: Text(
+                          cancelLabel,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () {
+                          HapticFeedback.selectionClick();
+                          Navigator.of(ctx).pop(true);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: actionColor,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        child: Text(
+                          confirmLabel,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    return result ?? false;
   }
 
   // ==========================================

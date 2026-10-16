@@ -22,7 +22,12 @@ class CycleBloc extends Bloc<CycleEvent, CycleState> {
     LoadCyclesEvent event,
     Emitter<CycleState> emit,
   ) async {
-    emit(CycleLoadingState());
+    final currentSelectedDate = state is CyclesLoadedState
+        ? (state as CyclesLoadedState).selectedDate
+        : DateTime.now();
+    if (state is! CyclesLoadedState) {
+      emit(CycleLoadingState());
+    }
     try {
       final active = await cycleRepository.getActiveCycle();
       final all = await cycleRepository.getCycles();
@@ -35,7 +40,7 @@ class CycleBloc extends Bloc<CycleEvent, CycleState> {
         CyclesLoadedState(
           activeCycle: active,
           cycles: all,
-          selectedDate: DateTime.now(),
+          selectedDate: currentSelectedDate,
           stats: stats,
         ),
       );

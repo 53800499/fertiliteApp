@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/di/service_locator.dart';
 import '../../../../core/error/api_exception.dart';
 import '../../../../core/error/error_feedback.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/modern_app_header.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../auth/presentation/bloc/auth_event.dart';
 import '../../../users/data/models/user_profile_model.dart';
@@ -30,6 +32,7 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
   }
 
   Future<void> _loadAll() async {
+    HapticFeedback.lightImpact();
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -202,27 +205,42 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.background,
-      appBar: AppBar(
-        title: const Text('Confidentialité & RGPD', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: AppTheme.textDark)),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: AppTheme.textDark),
-          onPressed: () => Navigator.maybePop(context),
-        ),
+      appBar: ModernAppHeader(
+        title: 'Confidentialité & RGPD',
+        subtitle: 'Sécurité & Données',
+        onRefresh: _loadAll,
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: AppTheme.primary))
           : _errorMessage != null
-              ? AppErrorEmptyView(
-                  error: _errorMessage,
-                  onRetry: _loadAll,
+              ? RefreshIndicator(
+                  color: AppTheme.primary,
+                  backgroundColor: Colors.white,
+                  onRefresh: _loadAll,
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(
+                      parent: BouncingScrollPhysics(),
+                    ),
+                    child: AppErrorEmptyView(
+                      error: _errorMessage,
+                      onRetry: _loadAll,
+                    ),
+                  ),
                 )
-              : SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
+              : RefreshIndicator(
+                  color: AppTheme.primary,
+                  backgroundColor: Colors.white,
+                  displacement: 40,
+                  strokeWidth: 2.5,
+                  onRefresh: _loadAll,
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(
+                      parent: BouncingScrollPhysics(),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
                       // Badge RGPD & Chiffrement
                       Container(
                         padding: const EdgeInsets.all(16),
@@ -479,6 +497,7 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
                     ],
                   ),
                 ),
+              ),
     );
   }
 

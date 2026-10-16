@@ -1,10 +1,11 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../network/network_cubit.dart';
 import '../theme/app_theme.dart';
 
-/// Header moderne, épuré et professionnel aux standards d'applications de santé haut de gamme
+/// Header moderne, épuré et ultra-professionnel aux standards d'applications de santé haut de gamme (FEMAX)
 class ModernAppHeader extends StatelessWidget implements PreferredSizeWidget {
   final String title;
   final String? subtitle;
@@ -28,29 +29,54 @@ class ModernAppHeader extends StatelessWidget implements PreferredSizeWidget {
   });
 
   @override
-  Size get preferredSize => const Size.fromHeight(70);
+  Size get preferredSize => const Size.fromHeight(72);
 
   @override
   Widget build(BuildContext context) {
-    Widget header = Container(
+    Widget? effectiveLeading = leading;
+    if (effectiveLeading == null && Navigator.canPop(context)) {
+      effectiveLeading = ModernHeaderIconButton(
+        icon: Icons.arrow_back_ios_new_rounded,
+        tooltip: 'Retour',
+        iconSize: 17,
+        onPressed: () {
+          HapticFeedback.selectionClick();
+          Navigator.maybePop(context);
+        },
+      );
+    }
+
+    Widget headerContent = Container(
       decoration: BoxDecoration(
-        color: backgroundColor ?? (transparent ? Colors.white.withValues(alpha: 0.82) : Colors.white),
+        color: backgroundColor ??
+            (transparent
+                ? Colors.white.withValues(alpha: 0.82)
+                : Colors.white.withValues(alpha: 0.96)),
         border: Border(
           bottom: BorderSide(
-            color: transparent ? Colors.white.withValues(alpha: 0.6) : AppTheme.borderLight,
+            color: transparent
+                ? AppTheme.primary.withValues(alpha: 0.08)
+                : AppTheme.borderLight.withValues(alpha: 0.8),
             width: 1.0,
           ),
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.025),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
       child: SafeArea(
         bottom: false,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
           child: Row(
             children: [
-              if (leading != null) ...[
-                leading!,
-                const SizedBox(width: 14),
+              if (effectiveLeading != null) ...[
+                effectiveLeading,
+                const SizedBox(width: 12),
               ],
               // Titre & Sous-titre hiérarchisé
               Expanded(
@@ -61,13 +87,26 @@ class ModernAppHeader extends StatelessWidget implements PreferredSizeWidget {
                     if (subtitle != null && subtitle!.isNotEmpty)
                       Row(
                         children: [
-                          Text(
-                            subtitle!.toUpperCase(),
-                            style: const TextStyle(
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w700,
+                          Container(
+                            width: 6,
+                            height: 6,
+                            margin: const EdgeInsets.only(right: 6),
+                            decoration: const BoxDecoration(
                               color: AppTheme.accentRose,
-                              letterSpacing: 1.1,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          Flexible(
+                            child: Text(
+                              subtitle!.toUpperCase(),
+                              style: const TextStyle(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w700,
+                                color: AppTheme.accentRose,
+                                letterSpacing: 1.15,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ],
@@ -76,7 +115,7 @@ class ModernAppHeader extends StatelessWidget implements PreferredSizeWidget {
                     Text(
                       title,
                       style: const TextStyle(
-                        fontSize: 20,
+                        fontSize: 20.5,
                         fontWeight: FontWeight.w800,
                         color: AppTheme.textDark,
                         letterSpacing: -0.4,
@@ -94,7 +133,7 @@ class ModernAppHeader extends StatelessWidget implements PreferredSizeWidget {
                 children: [
                   if (showNetworkStatus) _buildNetworkBadge(context),
                   if (onRefresh != null) ...[
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 6),
                     ModernHeaderIconButton(
                       icon: Icons.refresh_rounded,
                       tooltip: 'Actualiser',
@@ -113,13 +152,13 @@ class ModernAppHeader extends StatelessWidget implements PreferredSizeWidget {
     if (transparent) {
       return ClipRect(
         child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 14.0, sigmaY: 14.0),
-          child: header,
+          filter: ImageFilter.blur(sigmaX: 18.0, sigmaY: 18.0),
+          child: headerContent,
         ),
       );
     }
 
-    return header;
+    return headerContent;
   }
 
   Widget _buildNetworkBadge(BuildContext context) {
@@ -134,17 +173,25 @@ class ModernAppHeader extends StatelessWidget implements PreferredSizeWidget {
 
         return GestureDetector(
           onTap: () {
+            HapticFeedback.selectionClick();
             try {
               BlocProvider.of<NetworkCubit>(ctx).checkConnectivity();
             } catch (_) {}
           },
           child: Container(
             margin: const EdgeInsets.only(right: 6),
-            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
               color: const Color(0xFFFFF3E0),
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: const Color(0xFFFFCCBC), width: 1),
+              border: Border.all(color: const Color(0xFFFFB74D).withValues(alpha: 0.5), width: 1),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFE65100).withValues(alpha: 0.08),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -157,13 +204,14 @@ class ModernAppHeader extends StatelessWidget implements PreferredSizeWidget {
                     shape: BoxShape.circle,
                   ),
                 ),
-                const SizedBox(width: 5),
+                const SizedBox(width: 6),
                 const Text(
                   'Hors ligne',
                   style: TextStyle(
                     fontSize: 11,
-                    fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.w700,
                     color: Color(0xFFBF360C),
+                    letterSpacing: 0.1,
                   ),
                 ),
               ],
@@ -175,12 +223,13 @@ class ModernAppHeader extends StatelessWidget implements PreferredSizeWidget {
   }
 }
 
-/// Bouton d'action standardisé et moderne pour les headers
+/// Bouton d'action standardisé, raffiné et haptique pour les headers FEMAX
 class ModernHeaderIconButton extends StatelessWidget {
   final IconData icon;
   final String tooltip;
   final VoidCallback onPressed;
   final Color? iconColor;
+  final double iconSize;
 
   const ModernHeaderIconButton({
     super.key,
@@ -188,6 +237,7 @@ class ModernHeaderIconButton extends StatelessWidget {
     required this.tooltip,
     required this.onPressed,
     this.iconColor,
+    this.iconSize = 19,
   });
 
   @override
@@ -197,20 +247,32 @@ class ModernHeaderIconButton extends StatelessWidget {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: onPressed,
-          borderRadius: BorderRadius.circular(12),
+          onTap: () {
+            HapticFeedback.lightImpact();
+            onPressed();
+          },
+          borderRadius: BorderRadius.circular(14),
           child: Container(
             width: 38,
             height: 38,
             decoration: BoxDecoration(
-              color: const Color(0xFFF9F6FA),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFEDE5EC), width: 1),
+              color: Colors.white.withValues(alpha: 0.88),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppTheme.borderLight.withValues(alpha: 0.85), width: 1),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.035),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
-            child: Icon(
-              icon,
-              size: 19,
-              color: iconColor ?? AppTheme.textDark,
+            child: Center(
+              child: Icon(
+                icon,
+                size: iconSize,
+                color: iconColor ?? AppTheme.textDark,
+              ),
             ),
           ),
         ),

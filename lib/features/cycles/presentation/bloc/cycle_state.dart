@@ -47,9 +47,19 @@ class CyclesLoadedState extends CycleState {
     final dateStr =
         "${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
 
+    if (activeCycle != null) {
+      for (final jour in activeCycle!.joursRegles) {
+        final jDate = jour.date.length >= 10 ? jour.date.substring(0, 10) : jour.date;
+        if (jDate == dateStr) {
+          return jour;
+        }
+      }
+    }
+
     for (final cycle in cycles) {
       for (final jour in cycle.joursRegles) {
-        if (jour.date == dateStr) {
+        final jDate = jour.date.length >= 10 ? jour.date.substring(0, 10) : jour.date;
+        if (jDate == dateStr) {
           return jour;
         }
       }

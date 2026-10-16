@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../../../core/di/service_locator.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/glass_skeleton_loader.dart';
+import '../../../../core/error/error_feedback.dart';
+import '../../../users/data/models/user_profile_model.dart';
 import '../bloc/fertility_bloc.dart';
 import '../../data/models/fertility_models.dart';
 
-class FertilityExplanationBottomSheet extends StatelessWidget {
+class FertilityExplanationBottomSheet extends StatefulWidget {
   const FertilityExplanationBottomSheet({super.key});
 
   static Future<void> show(BuildContext context) {
@@ -20,7 +24,71 @@ class FertilityExplanationBottomSheet extends StatelessWidget {
   }
 
   @override
+  State<FertilityExplanationBottomSheet> createState() =>
+      _FertilityExplanationBottomSheetState();
+}
+
+class _FertilityExplanationBottomSheetState
+    extends State<FertilityExplanationBottomSheet> {
+  FullUserProfileModel? _profile;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
+    try {
+      final p = await ServiceLocator.userRepository.getProfile();
+      if (mounted) setState(() => _profile = p);
+    } catch (_) {}
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final objective = _profile?.profil.objectifPrincipal ?? 'suivi_cycle';
+    Color headerColor;
+    IconData headerIcon;
+    String headerSubtitle;
+    String bannerTitle;
+    String bannerSubtitle;
+
+    switch (objective) {
+      case 'planifier_grossesse':
+      case 'concevoir':
+        headerColor = AppTheme.accentRose;
+        headerIcon = Icons.favorite_rounded;
+        headerSubtitle = 'Optimisation conception & biomarqueurs';
+        bannerTitle = 'Projet conception & fertilité ciblée';
+        bannerSubtitle = 'Estimation continue pour synchroniser vos essais avec votre physiologie.';
+        break;
+      case 'eviter_grossesse':
+      case 'contraception_naturelle':
+        headerColor = Colors.teal.shade700;
+        headerIcon = Icons.shield_rounded;
+        headerSubtitle = 'Vigilance naturelle & marge de précaution';
+        bannerTitle = 'Observation éclairée & précaution';
+        bannerSubtitle = 'Repère de sécurité pour vous guider dans la gestion naturelle de votre cycle.';
+        break;
+      case 'comprendre_corps':
+        headerColor = Colors.purple.shade700;
+        headerIcon = Icons.auto_awesome_rounded;
+        headerSubtitle = 'Biorhythme hormonal & écoute de soi';
+        bannerTitle = 'Harmonie hormonale & écoute de soi';
+        bannerSubtitle = 'Décryptez l’impact de vos cycles sur votre énergie, vos sensations et votre humeur.';
+        break;
+      case 'suivi_cycle':
+      case 'suivre_cycle':
+      default:
+        headerColor = AppTheme.primary;
+        headerIcon = Icons.calendar_today_rounded;
+        headerSubtitle = 'Repères physiologiques & régularité';
+        bannerTitle = 'Pédagogie & régularité du cycle';
+        bannerSubtitle = 'Repères clairs pour anticiper chaque étape et vivre vos cycles en toute sérénité.';
+        break;
+    }
+
     return Container(
       constraints: BoxConstraints(
         maxHeight: MediaQuery.of(context).size.height * 0.9,
@@ -43,7 +111,7 @@ class FertilityExplanationBottomSheet extends StatelessWidget {
           ),
           const SizedBox(height: 14),
 
-          // En-tête
+          // En-tête adapté à l'objectif
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 22),
             child: Row(
@@ -51,27 +119,27 @@ class FertilityExplanationBottomSheet extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: AppTheme.primaryLight,
+                    color: headerColor.withValues(alpha: 0.12),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.auto_awesome_rounded, color: AppTheme.primary, size: 22),
+                  child: Icon(headerIcon, color: headerColor, size: 22),
                 ),
                 const SizedBox(width: 12),
-                const Expanded(
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
+                      const Text(
                         'Comprendre mon estimation',
                         style: TextStyle(
-                          fontSize: 18,
+                          fontSize: 17,
                           fontWeight: FontWeight.bold,
                           color: AppTheme.textDark,
                         ),
                       ),
                       Text(
-                        'Explications médicales & facteurs d’influence',
-                        style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                        headerSubtitle,
+                        style: const TextStyle(fontSize: 11.5, color: AppTheme.textMuted),
                       ),
                     ],
                   ),
@@ -90,31 +158,15 @@ class FertilityExplanationBottomSheet extends StatelessWidget {
             child: BlocBuilder<FertilityBloc, FertilityState>(
               builder: (context, state) {
                 if (state is FertilityLoadingState) {
-                  return const Center(
-                    child: CircularProgressIndicator(color: AppTheme.primary),
-                  );
+                  return const _FertilityExplanationSkeleton();
                 }
 
                 if (state is FertilityFailureState) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.error_outline_rounded, size: 48, color: Colors.red),
-                          const SizedBox(height: 12),
-                          Text(state.message, textAlign: TextAlign.center),
-                          const SizedBox(height: 16),
-                          ElevatedButton(
-                            onPressed: () => context
-                                .read<FertilityBloc>()
-                                .add(const LoadCurrentFertilityEvent()),
-                            child: const Text('Réessayer'),
-                          ),
-                        ],
-                      ),
-                    ),
+                  return AppErrorEmptyView(
+                    error: state.message,
+                    onRetry: () => context
+                        .read<FertilityBloc>()
+                        .add(const LoadCurrentFertilityEvent()),
                   );
                 }
 
@@ -151,28 +203,28 @@ class FertilityExplanationBottomSheet extends StatelessWidget {
                                 errorBuilder: (context, error, stackTrace) => Container(
                                   width: 56,
                                   height: 56,
-                                  color: AppTheme.primaryLight,
-                                  child: const Icon(Icons.spa_rounded, color: AppTheme.primary),
+                                  color: headerColor.withValues(alpha: 0.12),
+                                  child: Icon(headerIcon, color: headerColor),
                                 ),
                               ),
                             ),
                             const SizedBox(width: 14),
-                            const Expanded(
+                            Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    'Pédagogie & Écoute de soi',
-                                    style: TextStyle(
+                                    bannerTitle,
+                                    style: const TextStyle(
                                       fontSize: 13,
                                       fontWeight: FontWeight.w800,
                                       color: AppTheme.textDark,
                                     ),
                                   ),
-                                  SizedBox(height: 3),
+                                  const SizedBox(height: 3),
                                   Text(
-                                    'Cette estimation est un repère personnalisé basé sur vos biomarqueurs récents.',
-                                    style: TextStyle(
+                                    bannerSubtitle,
+                                    style: const TextStyle(
                                       fontSize: 11,
                                       color: AppTheme.textMuted,
                                       height: 1.35,
@@ -185,7 +237,11 @@ class FertilityExplanationBottomSheet extends StatelessWidget {
                         ),
                       ),
 
-                      // 1. Carte Score & Jauge
+                      // 1. Orientation selon l'objectif déclaré
+                      _buildObjectiveGuidanceBanner(prediction),
+                      const SizedBox(height: 16),
+
+                      // 2. Carte Score & Jauge
                       _buildScoreGaugeCard(prediction),
                       const SizedBox(height: 20),
 
@@ -249,16 +305,291 @@ class FertilityExplanationBottomSheet extends StatelessWidget {
     );
   }
 
-  Widget _buildScoreGaugeCard(PredictionModel prediction) {
-    Color categoryColor = Colors.grey;
-    String categoryLabel = 'Probabilité faible';
+  Widget _buildObjectiveGuidanceBanner(PredictionModel prediction) {
+    final objective = _profile?.profil.objectifPrincipal ?? 'suivi_cycle';
+    String tag;
+    String title;
+    String desc;
+    List<Map<String, String>> points;
+    Color accentColor;
+    IconData icon;
 
-    if (prediction.fertilityCategory == 'elevee') {
-      categoryColor = AppTheme.accentRose;
-      categoryLabel = 'Probabilité élevée';
-    } else if (prediction.fertilityCategory == 'moyenne') {
-      categoryColor = Colors.orange;
-      categoryLabel = 'Probabilité moyenne';
+    switch (objective) {
+      case 'planifier_grossesse':
+      case 'concevoir':
+        tag = 'OBJECTIF CONCEPTION';
+        title = 'Calcul calibré pour maximiser vos chances';
+        desc =
+            'Votre score continu de ${prediction.fertilityScoreValue.round()}% traduit votre probabilité biologique de concevoir aujourd\'hui. Visez des rapports rapprochés lorsque le score s\'élève.';
+        points = [
+          {
+            'title': 'Score continu de conception',
+            'desc': 'Calcul en temps réel basé sur la viabilité des ovocytes et spermatozoïdes.',
+          },
+          {
+            'title': 'Biomarqueurs amplificateurs',
+            'desc': 'La glaire cervicale filante et les tests d\'ovulation (LH) augmentent considérablement l\'estimation.',
+          },
+          {
+            'title': 'Fenêtre prioritaire',
+            'desc': 'Les 5 jours précédant l\'ovulation et le jour J offrent les meilleures chances.',
+          },
+        ];
+        accentColor = AppTheme.accentRose;
+        icon = Icons.favorite_rounded;
+        break;
+
+      case 'eviter_grossesse':
+      case 'contraception_naturelle':
+        tag = 'MÉTHODE NATURELLE';
+        title = 'Calcul appliquant une marge de sécurité stricte';
+        desc =
+            'Dans une démarche d\'observation naturelle, toute incertitude élargit la zone de précaution afin de garantir votre sérénité.';
+        points = [
+          {
+            'title': 'Marge de précaution maximale',
+            'desc': 'Le calcul intègre la survie prolongée des spermatozoïdes (jusqu\'à 5 jours dans les voies génitales).',
+          },
+          {
+            'title': 'Surveillance des biomarqueurs',
+            'desc': 'Dès l\'apparition d\'une glaire fertile ou d\'un test LH positif, la zone de vigilance est immédiate.',
+          },
+          {
+            'title': 'Recommandation barrière',
+            'desc': 'Préservatif ou abstinence recommandés durant toute la zone colorée.',
+          },
+        ];
+        accentColor = Colors.teal.shade700;
+        icon = Icons.shield_rounded;
+        break;
+
+      case 'comprendre_corps':
+        tag = 'BIORHYTHME & HORMONES';
+        title = 'Décodage de votre climat hormonal';
+        desc =
+            'Ce pourcentage mesure l\'intensité de votre climat œstrogénique et la réceptivité globale de votre corps tout au long du cycle.';
+        points = [
+          {
+            'title': 'Climat œstrogénique & progestatif',
+            'desc': 'Suivez le passage de la phase folliculaire (énergie montante) à la phase lutéale (ancrage et calme).',
+          },
+          {
+            'title': 'Corrélation énergie & humeur',
+            'desc': 'Comprenez pourquoi votre vitalité, votre libido et votre sommeil évoluent selon ce score.',
+          },
+          {
+            'title': 'Écoute active des signaux',
+            'desc': 'Reliez vos observations quotidiennes (glaire, température, tension) à vos cycles biologiques.',
+          },
+        ];
+        accentColor = Colors.purple.shade700;
+        icon = Icons.auto_awesome_rounded;
+        break;
+
+      case 'suivi_cycle':
+      case 'suivre_cycle':
+      default:
+        tag = 'SUIVI DU CYCLE';
+        title = 'Repères physiologiques & calendrier prédictif';
+        desc =
+            'Ce calcul mesure votre position dans votre cycle habituel pour anticiper les étapes clés avec régularité.';
+        points = [
+          {
+            'title': 'Anticipation des règles',
+            'desc': 'Calcul automatique basé sur une phase lutéale standard (~14 jours post-ovulation).',
+          },
+          {
+            'title': 'Détection des retards & SPM',
+            'desc': 'Alertes douces pour vous préparer aux variations prémenstruelles sans stress.',
+          },
+          {
+            'title': 'Stabilité et régularité',
+            'desc': 'Plus vous complétez vos cycles, plus l\'algorithme affine vos intervalles personnalisés.',
+          },
+        ];
+        accentColor = AppTheme.primary;
+        icon = Icons.calendar_today_rounded;
+        break;
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: accentColor.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: accentColor.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Flexible(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+                  decoration: BoxDecoration(
+                    color: accentColor.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(icon, size: 12, color: accentColor),
+                      const SizedBox(width: 5),
+                      Flexible(
+                        child: Text(
+                          tag,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            color: accentColor,
+                            letterSpacing: 0.3,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Adapté au profil',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  color: accentColor,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: AppTheme.textDark,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            desc,
+            style: const TextStyle(
+              fontSize: 11.5,
+              color: AppTheme.textMuted,
+              height: 1.35,
+            ),
+          ),
+          const SizedBox(height: 10),
+          const Divider(height: 1, thickness: 0.5, color: AppTheme.borderLight),
+          const SizedBox(height: 10),
+          ...points.map((pt) => Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Icon(Icons.check_circle_rounded, size: 14, color: accentColor),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: RichText(
+                        text: TextSpan(
+                          children: [
+                            TextSpan(
+                              text: '${pt['title']!} : ',
+                              style: const TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.bold,
+                                color: AppTheme.textDark,
+                              ),
+                            ),
+                            TextSpan(
+                              text: pt['desc']!,
+                              style: const TextStyle(
+                                fontSize: 11.5,
+                                color: AppTheme.textMuted,
+                                height: 1.3,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              )),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildScoreGaugeCard(PredictionModel prediction) {
+    final objective = _profile?.profil.objectifPrincipal ?? 'suivi_cycle';
+    final isElevee = prediction.fertilityCategory == 'elevee';
+    final isMoyenne = prediction.fertilityCategory == 'moyenne';
+
+    Color categoryColor;
+    String categoryLabel;
+    String scoreSubtitle;
+    String ovulationLabel;
+    String windowLabel;
+
+    switch (objective) {
+      case 'planifier_grossesse':
+      case 'concevoir':
+        categoryColor = isElevee
+            ? AppTheme.accentRose
+            : (isMoyenne ? Colors.orange : Colors.grey.shade600);
+        categoryLabel = isElevee
+            ? 'Chances de conception maximales 🔥'
+            : (isMoyenne ? 'Chances de conception modérées 🌱' : 'Chances de conception faibles 💤');
+        scoreSubtitle = 'Score continu de conception : ${prediction.fertilityScoreValue.toStringAsFixed(1)} / 100';
+        ovulationLabel = 'Pic ovulatoire estimé';
+        windowLabel = 'Fenêtre de conception';
+        break;
+
+      case 'eviter_grossesse':
+      case 'contraception_naturelle':
+        categoryColor = isElevee
+            ? Colors.deepOrange.shade700
+            : (isMoyenne ? Colors.amber.shade800 : Colors.teal.shade700);
+        categoryLabel = isElevee
+            ? 'Période fertile (Prudence) ⚠️'
+            : (isMoyenne ? 'Zone d’incertitude fertile 🛡️' : 'Période peu fertile ✅');
+        scoreSubtitle = 'Indice d’exposition : ${prediction.fertilityScoreValue.toStringAsFixed(1)} / 100';
+        ovulationLabel = 'Charnière ovulatoire';
+        windowLabel = 'Zone de prudence';
+        break;
+
+      case 'comprendre_corps':
+        categoryColor = isElevee
+            ? Colors.purple.shade700
+            : (isMoyenne ? Colors.indigo.shade600 : Colors.teal.shade700);
+        categoryLabel = isElevee
+            ? 'Apogée œstrogénique ✨'
+            : (isMoyenne ? 'Transition hormonale 🌸' : 'Phase de repos hormonal 🌙');
+        scoreSubtitle = 'Intensité hormonale : ${prediction.fertilityScoreValue.toStringAsFixed(1)} / 100';
+        ovulationLabel = 'Bascule hormonale';
+        windowLabel = 'Fenêtre œstrogénique';
+        break;
+
+      case 'suivi_cycle':
+      case 'suivre_cycle':
+      default:
+        categoryColor = isElevee
+            ? AppTheme.accentRose
+            : (isMoyenne ? Colors.orange : Colors.grey.shade600);
+        categoryLabel = isElevee
+            ? 'Fécondité élevée 📈'
+            : (isMoyenne ? 'Approche de l’ovulation 🗓️' : 'Phase non fertile 📅');
+        scoreSubtitle = 'Score physiologique : ${prediction.fertilityScoreValue.toStringAsFixed(1)} / 100';
+        ovulationLabel = 'Ovulation estimée';
+        windowLabel = 'Fenêtre fertile';
+        break;
     }
 
     final scoreRatio = (prediction.fertilityScoreValue / 100.0).clamp(0.0, 1.0);
@@ -275,24 +606,31 @@ class FertilityExplanationBottomSheet extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    categoryLabel,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: categoryColor,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      categoryLabel,
+                      style: TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.bold,
+                        color: categoryColor,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Score continu : ${prediction.fertilityScoreValue.toStringAsFixed(1)} / 100',
-                    style: const TextStyle(fontSize: 12.5, color: AppTheme.textMuted),
-                  ),
-                ],
+                    const SizedBox(height: 4),
+                    Text(
+                      scoreSubtitle,
+                      style: const TextStyle(fontSize: 11.5, color: AppTheme.textMuted),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
@@ -331,7 +669,7 @@ class FertilityExplanationBottomSheet extends StatelessWidget {
               Expanded(
                 flex: 4,
                 child: _buildMetricChip(
-                  'Ovulation estimée',
+                  ovulationLabel,
                   _formatDate(prediction.estimatedOvulationDate),
                   Icons.egg_outlined,
                 ),
@@ -340,7 +678,7 @@ class FertilityExplanationBottomSheet extends StatelessWidget {
               Expanded(
                 flex: 5,
                 child: _buildMetricChip(
-                  'Fenêtre fertile',
+                  windowLabel,
                   _formatWindow(prediction.fertileWindow.startDate, prediction.fertileWindow.endDate),
                   Icons.date_range_rounded,
                 ),
@@ -412,21 +750,24 @@ class FertilityExplanationBottomSheet extends StatelessWidget {
   }
 
   Widget _buildConfidenceCard(PredictionModel prediction) {
+    final objective = _profile?.profil.objectifPrincipal ?? 'suivi_cycle';
     String label = 'Confiance moyenne';
     Color color = Colors.orange;
     String tip =
-      'Basée sur un historique partiel de vos cycles. Continuez vos saisies pour affiner la prédiction.';
+        'Basée sur un historique partiel de vos cycles. Continuez vos saisies pour affiner la prédiction.';
 
     if (prediction.confidenceLevel == 'eleve') {
       label = 'Confiance élevée';
       color = Colors.teal;
-      tip =
-        'Vos cycles présentent une forte régularité statistique confirmée par vos observations.';
+      tip = (objective == 'eviter_grossesse' || objective == 'contraception_naturelle')
+          ? 'Vos biomarqueurs confirment une excellente régularité, réduisant au minimum la marge d’aléa statistique.'
+          : 'Vos cycles présentent une forte régularité statistique confirmée par vos observations.';
     } else if (prediction.confidenceLevel == 'faible') {
       label = 'Confiance indicative';
       color = Colors.deepOrange;
-      tip =
-        'Historique encore jeune ou variabilité constatée. La fenêtre est élargie par précaution.';
+      tip = (objective == 'eviter_grossesse' || objective == 'contraception_naturelle')
+          ? 'Historique jeune ou cycles variables. La zone de prudence est volontairement élargie pour votre sécurité.'
+          : 'Historique encore jeune ou variabilité constatée. La fenêtre est élargie par précaution.';
     }
 
     return Container(
@@ -571,30 +912,137 @@ class FertilityExplanationBottomSheet extends StatelessWidget {
   }
 
   Widget _buildMedicalDisclaimer() {
+    final objective = _profile?.profil.objectifPrincipal ?? 'suivi_cycle';
+    String title;
+    String text;
+    Color iconColor;
+
+    switch (objective) {
+      case 'planifier_grossesse':
+      case 'concevoir':
+        title = 'Projet de conception & fertilité';
+        text =
+            'Ces repères visent à optimiser vos chances de concevoir. La fécondation dépend de multiples facteurs physiologiques chez les deux partenaires. En cas de questions ou d’essais prolongés, consultez un professionnel de santé spécialisé.';
+        iconColor = AppTheme.accentRose;
+        break;
+
+      case 'eviter_grossesse':
+      case 'contraception_naturelle':
+        title = 'Avertissement méthode naturelle & sécurité';
+        text =
+            'Cette estimation algorithmique est un outil d’auto-observation et de repère statistique. Elle ne constitue en aucun cas une méthode contraceptive médicale infaillible ni un substitut à l’apprentissage rigoureux de la symptothermie avec un professionnel formé.';
+        iconColor = Colors.teal.shade700;
+        break;
+
+      case 'comprendre_corps':
+        title = 'Accompagnement bien-être & écoute de soi';
+        text =
+            'Ce décodage hormonal est indicatif et pédagogique. Chaque organisme réagit à son rythme face au stress, à la fatigue et au mode de vie. En cas de douleurs inhabituelles ou d’irrégularités soudaines, demandez l’avis d’un professionnel.';
+        iconColor = Colors.purple.shade700;
+        break;
+
+      case 'suivi_cycle':
+      case 'suivre_cycle':
+      default:
+        title = 'Avertissement médical';
+        text =
+            'Cette estimation repose sur des règles physiologiques et statistiques. Elle ne garantit jamais la survenue d’une grossesse et ne constitue pas une méthode de contraception ni un diagnostic médical.';
+        iconColor = AppTheme.primary;
+        break;
+    }
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.grey.shade200),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: const [
-          Icon(Icons.shield_outlined, size: 18, color: AppTheme.textMuted),
-          SizedBox(width: 10),
+        children: [
+          Icon(Icons.shield_outlined, size: 20, color: iconColor),
+          const SizedBox(width: 12),
           Expanded(
-            child: Text(
-              'Avertissement médical : Cette estimation repose sur des règles physiologiques et statistiques. Elle ne garantit jamais la survenue d’une grossesse et ne constitue pas une méthode de contraception ni un diagnostic médical.',
-              style: TextStyle(
-                fontSize: 11,
-                color: AppTheme.textMuted,
-                height: 1.4,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.textDark,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  text,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: AppTheme.textMuted,
+                    height: 1.4,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _FertilityExplanationSkeleton extends StatefulWidget {
+  const _FertilityExplanationSkeleton();
+
+  @override
+  State<_FertilityExplanationSkeleton> createState() =>
+      _FertilityExplanationSkeletonState();
+}
+
+class _FertilityExplanationSkeletonState
+    extends State<_FertilityExplanationSkeleton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1300),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        final opacity = 0.35 + (_controller.value * 0.45);
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ShimmerBone(height: 70, borderRadius: 18, opacity: opacity),
+              const SizedBox(height: 16),
+              ShimmerBone(height: 140, borderRadius: 24, opacity: opacity),
+              const SizedBox(height: 16),
+              ShimmerBone(height: 80, borderRadius: 16, opacity: opacity),
+              const SizedBox(height: 12),
+              ShimmerBone(height: 80, borderRadius: 16, opacity: opacity),
+            ],
+          ),
+        );
+      },
     );
   }
 }

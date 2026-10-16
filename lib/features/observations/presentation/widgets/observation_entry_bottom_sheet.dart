@@ -5,9 +5,14 @@ import '../../../../core/theme/app_theme.dart';
 import '../../data/models/observation_models.dart';
 import '../bloc/observation_bloc.dart';
 import '../bloc/observation_event.dart';
+import '../../../fertility/presentation/bloc/fertility_bloc.dart';
+import '../../../cycles/presentation/bloc/cycle_bloc.dart';
+import '../../../cycles/presentation/bloc/cycle_event.dart';
 import '../../../../core/network/network_cubit.dart';
 import '../../../../core/error/api_exception.dart';
 import '../../../../core/error/error_feedback.dart';
+import '../../../../core/widgets/app_feedback.dart';
+import '../../../../core/di/service_locator.dart';
 
 class ObservationEntryBottomSheet extends StatefulWidget {
   final DateTime date;
@@ -21,26 +26,35 @@ class ObservationEntryBottomSheet extends StatefulWidget {
     this.catalog = const [],
   });
 
-  static Future<void> show(
+  static Future<bool?> show(
     BuildContext context, {
     required DateTime date,
     DayObservationsModel? existingObservations,
     List<TypeSymptomeModel> catalog = const [],
   }) {
     final dateStr = DateFormat('yyyy-MM-dd').format(date);
-    final bloc = context.read<ObservationBloc>();
-    bloc.add(LoadDayObservationsEvent(dateStr));
+    final obsBloc = context.read<ObservationBloc>();
+    final fertBloc = context.read<FertilityBloc>();
+    final cycleBloc = context.read<CycleBloc>();
+    obsBloc.add(LoadDayObservationsEvent(dateStr));
 
-    return showModalBottomSheet(
+    final effectiveObs = existingObservations ?? obsBloc.cachedDays[dateStr];
+    final effectiveCatalog = catalog.isNotEmpty ? catalog : obsBloc.cachedCatalog;
+
+    return showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (modalContext) => BlocProvider.value(
-        value: bloc,
+      builder: (modalContext) => MultiBlocProvider(
+        providers: [
+          BlocProvider.value(value: obsBloc),
+          BlocProvider.value(value: fertBloc),
+          BlocProvider.value(value: cycleBloc),
+        ],
         child: ObservationEntryBottomSheet(
           date: date,
-          existingObservations: existingObservations,
-          catalog: catalog,
+          existingObservations: effectiveObs,
+          catalog: effectiveCatalog,
         ),
       ),
     );
@@ -54,6 +68,7 @@ class ObservationEntryBottomSheet extends StatefulWidget {
 class _ObservationEntryBottomSheetState
     extends State<ObservationEntryBottomSheet> with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  bool _isSaving = false;
 
   // 1. Température state
   bool _enableTemp = false;
@@ -134,13 +149,13 @@ class _ObservationEntryBottomSheetState
     super.dispose();
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     bool isOnline = true;
     try {
       isOnline = BlocProvider.of<NetworkCubit>(context, listen: false).state.isOnline;
     } catch (_) {}
     if (!isOnline) {
-      AppErrorFeedback.showSnackBar(
+      AppFeedback.showError(
         context,
         error: const ApiException(
           title: 'Mode hors ligne',
@@ -149,6 +164,16 @@ class _ObservationEntryBottomSheetState
           actionSuggestion: 'Vérifiez votre connexion au réseau puis réessayez.',
           errorCode: 'NETWORK_OFFLINE',
         ),
+      );
+      return;
+    }
+
+    // Validation ergonomique des bornes de température
+    if (_enableTemp && (_temperature < 35.0 || _temperature > 41.5)) {
+      AppFeedback.showWarning(
+        context,
+        title: 'Température inhabituelle',
+        message: 'La température saisie (${_temperature.toStringAsFixed(2)} °C) sort des bornes physiologiques courantes. Vérifiez votre mesure.',
       );
       return;
     }
@@ -208,8 +233,33 @@ class _ObservationEntryBottomSheetState
       symptomes: symptomsList,
     );
 
-    context.read<ObservationBloc>().add(SaveDayObservationEvent(req));
-    Navigator.of(context).pop();
+    setState(() => _isSaving = true);
+    try {
+      await ServiceLocator.observationRepository.saveDayObservation(req);
+      if (!mounted) return;
+      context.read<ObservationBloc>().add(LoadDayObservationsEvent(dateStr));
+      context.read<FertilityBloc>().add(const LoadCurrentFertilityEvent());
+      context.read<FertilityBloc>().add(LoadMonthCalendarEvent(
+            year: widget.date.year,
+            month: widget.date.month,
+          ));
+      context.read<CycleBloc>().add(LoadCyclesEvent());
+      Navigator.of(context).pop(true);
+      AppFeedback.showSuccess(
+        context,
+        title: 'Biomarqueurs enregistrés ✨',
+        message: 'Vos observations et biomarqueurs ont été enregistrés avec succès.',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      AppFeedback.showError(
+        context,
+        error: e,
+        customTitle: 'Enregistrement impossible',
+      );
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   @override
@@ -222,116 +272,154 @@ class _ObservationEntryBottomSheetState
       formattedDate = DateFormat('yyyy-MM-dd').format(widget.date);
     }
 
-    return Container(
-      height: MediaQuery.of(context).size.height * 0.82,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      child: Column(
-        children: [
-          // Poignée supérieure
-          const SizedBox(height: 12),
-          Container(
-            width: 48,
-            height: 5,
-            decoration: BoxDecoration(
-              color: AppTheme.borderLight,
-              borderRadius: BorderRadius.circular(3),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final hasChanges = _enableTemp ||
+            _enableGlaire ||
+            _enableLh ||
+            _selectedSymptoms.isNotEmpty ||
+            _notesTempController.text.trim().isNotEmpty ||
+            _notesGlaireController.text.trim().isNotEmpty ||
+            _notesLhController.text.trim().isNotEmpty;
+
+        if (hasChanges) {
+          final discard = await AppFeedback.showConfirmationDialog(
+            context,
+            title: 'Abandonner la saisie ?',
+            message: 'Les biomarqueurs et symptômes renseignés ne seront pas enregistrés.',
+            confirmLabel: 'Abandonner',
+            cancelLabel: 'Continuer la saisie',
+            isDestructive: true,
+            icon: Icons.close_rounded,
+          );
+          if (discard && context.mounted) {
+            Navigator.pop(context);
+          }
+        } else {
+          Navigator.pop(context);
+        }
+      },
+      child: Container(
+        height: MediaQuery.of(context).size.height * 0.82,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: Column(
+          children: [
+            // Poignée supérieure
+            const SizedBox(height: 12),
+            Container(
+              width: 48,
+              height: 5,
+              decoration: BoxDecoration(
+                color: AppTheme.borderLight,
+                borderRadius: BorderRadius.circular(3),
+              ),
             ),
-          ),
-          const SizedBox(height: 16),
+            const SizedBox(height: 16),
 
-          // En-tête
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Observations & Biomarqueurs',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: AppTheme.textDark,
+            // En-tête
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Observations & Biomarqueurs',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.textDark,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      formattedDate,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: AppTheme.textMuted,
+                      const SizedBox(height: 2),
+                      Text(
+                        formattedDate,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: AppTheme.textMuted,
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-                IconButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  icon: const Icon(Icons.close_rounded, color: AppTheme.textMuted),
-                ),
-              ],
+                    ],
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).maybePop(),
+                    icon: const Icon(Icons.close_rounded, color: AppTheme.textMuted),
+                  ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
+            const SizedBox(height: 12),
 
-          // Onglets (T°, Glaire, Test LH, Symptômes)
-          TabBar(
-            controller: _tabController,
-            labelColor: AppTheme.primary,
-            unselectedLabelColor: AppTheme.textMuted,
-            indicatorColor: AppTheme.primary,
-            labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-            tabs: const [
-              Tab(icon: Icon(Icons.thermostat_rounded, size: 20), text: 'Température'),
-              Tab(icon: Icon(Icons.water_drop_rounded, size: 20), text: 'Glaire'),
-              Tab(icon: Icon(Icons.biotech_rounded, size: 20), text: 'Test LH'),
-              Tab(icon: Icon(Icons.sentiment_satisfied_rounded, size: 20), text: 'Symptômes'),
-            ],
-          ),
-
-          // Corps des onglets
-          Expanded(
-            child: TabBarView(
+            // Onglets (T°, Glaire, Test LH, Symptômes)
+            TabBar(
               controller: _tabController,
-              children: [
-                _buildTemperatureTab(),
-                _buildGlaireTab(),
-                _buildLhTab(),
-                _buildSymptomsTab(),
+              labelColor: AppTheme.primary,
+              unselectedLabelColor: AppTheme.textMuted,
+              indicatorColor: AppTheme.primary,
+              labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+              tabs: const [
+                Tab(icon: Icon(Icons.thermostat_rounded, size: 20), text: 'Température'),
+                Tab(icon: Icon(Icons.water_drop_rounded, size: 20), text: 'Glaire'),
+                Tab(icon: Icon(Icons.biotech_rounded, size: 20), text: 'Test LH'),
+                Tab(icon: Icon(Icons.sentiment_satisfied_rounded, size: 20), text: 'Symptômes'),
               ],
             ),
-          ),
 
-          // Bouton de validation
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              border: Border(top: BorderSide(color: AppTheme.borderLight, width: 1)),
+            // Corps des onglets
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildTemperatureTab(),
+                  _buildGlaireTab(),
+                  _buildLhTab(),
+                  _buildSymptomsTab(),
+                ],
+              ),
             ),
-            child: SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton.icon(
-                onPressed: _submit,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.primary,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  elevation: 0,
-                ),
-                icon: const Icon(Icons.check_rounded, color: Colors.white),
-                label: const Text(
-                  'Enregistrer les observations',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+
+            // Bouton de validation
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                border: Border(top: BorderSide(color: AppTheme.borderLight, width: 1)),
+              ),
+              child: SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton.icon(
+                  onPressed: _isSaving ? null : _submit,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primary,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    elevation: 0,
+                  ),
+                  icon: _isSaving
+                      ? const SizedBox.shrink()
+                      : const Icon(Icons.check_rounded, color: Colors.white),
+                  label: _isSaving
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Text(
+                          'Enregistrer les observations',
+                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                        ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

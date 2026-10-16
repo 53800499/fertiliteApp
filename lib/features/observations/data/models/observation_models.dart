@@ -94,17 +94,19 @@ class TemperatureBasaleModel extends Equatable {
   });
 
   factory TemperatureBasaleModel.fromJson(Map<String, dynamic> json) {
+    String rawDate = (json['date'] as String? ?? '').trim();
+    if (rawDate.length >= 10) rawDate = rawDate.substring(0, 10);
     return TemperatureBasaleModel(
       id: json['id'] as String?,
-      date: json['date'] as String,
+      date: rawDate,
       temperatureCelsius: (json['temperatureCelsius'] is num)
           ? (json['temperatureCelsius'] as num).toDouble()
           : double.tryParse(json['temperatureCelsius']?.toString() ?? '36.5') ?? 36.5,
-      heurePrise: json['heurePrise'] as String?,
-      estPerturbee: json['estPerturbee'] as bool? ?? false,
-      facteurPerturbateur: json['facteurPerturbateur'] as String?,
+      heurePrise: (json['heurePrise'] ?? json['heure_prise']) as String?,
+      estPerturbee: (json['estPerturbee'] ?? json['est_perturbee']) as bool? ?? false,
+      facteurPerturbateur: (json['facteurPerturbateur'] ?? json['facteur_perturbateur']) as String?,
       notes: json['notes'] as String?,
-      idClientLocal: json['idClientLocal'] as String?,
+      idClientLocal: (json['idClientLocal'] ?? json['id_client_local']) as String?,
     );
   }
 
@@ -154,14 +156,16 @@ class GlaireCervicaleModel extends Equatable {
   });
 
   factory GlaireCervicaleModel.fromJson(Map<String, dynamic> json) {
+    String rawDate = (json['date'] as String? ?? '').trim();
+    if (rawDate.length >= 10) rawDate = rawDate.substring(0, 10);
     return GlaireCervicaleModel(
       id: json['id'] as String?,
-      date: json['date'] as String,
-      typeGlaire: json['typeGlaire'] as String,
+      date: rawDate,
+      typeGlaire: (json['typeGlaire'] ?? json['type_glaire']) as String? ?? 'cremeux',
       quantite: json['quantite'] as String?,
       sensation: json['sensation'] as String?,
       notes: json['notes'] as String?,
-      idClientLocal: json['idClientLocal'] as String?,
+      idClientLocal: (json['idClientLocal'] ?? json['id_client_local']) as String?,
     );
   }
 
@@ -203,16 +207,24 @@ class TestOvulationModel extends Equatable {
   });
 
   factory TestOvulationModel.fromJson(Map<String, dynamic> json) {
+    String rawDate = (json['date'] as String? ?? '').trim();
+    if (rawDate.length >= 10) rawDate = rawDate.substring(0, 10);
     return TestOvulationModel(
       id: json['id'] as String?,
-      date: json['date'] as String,
-      heureTest: json['heureTest'] as String?,
-      resultat: json['resultat'] as String,
+      date: rawDate,
+      heureTest: (json['heureTest'] ?? json['heure_test']) as String?,
+      resultat: (json['resultat'] ?? json['result']) as String? ?? 'negatif',
       valeurMUiMl: json['valeurMUiMl'] != null
-          ? (json['valeurMUiMl'] as num).toDouble()
-          : null,
+          ? ((json['valeurMUiMl'] is num)
+              ? (json['valeurMUiMl'] as num).toDouble()
+              : double.tryParse(json['valeurMUiMl'].toString()))
+          : (json['valeur_mui_ml'] != null
+              ? ((json['valeur_mui_ml'] is num)
+                  ? (json['valeur_mui_ml'] as num).toDouble()
+                  : double.tryParse(json['valeur_mui_ml'].toString()))
+              : null),
       notes: json['notes'] as String?,
-      idClientLocal: json['idClientLocal'] as String?,
+      idClientLocal: (json['idClientLocal'] ?? json['id_client_local']) as String?,
     );
   }
 
@@ -309,14 +321,18 @@ class ObservationSymptomeModel extends Equatable {
   });
 
   factory ObservationSymptomeModel.fromJson(Map<String, dynamic> json) {
+    String rawDate = (json['date'] as String? ?? '').trim();
+    if (rawDate.length >= 10) rawDate = rawDate.substring(0, 10);
     return ObservationSymptomeModel(
       id: json['id'] as String?,
-      date: json['date'] as String,
-      typeSymptomeId: json['typeSymptomeId'] as String,
+      date: rawDate,
+      typeSymptomeId: (json['typeSymptomeId'] ?? json['type_symptome_id'] ?? json['typeSymptome']?['id']) as String? ?? '',
       typeSymptome: json['typeSymptome'] != null
           ? TypeSymptomeModel.fromJson(json['typeSymptome'] as Map<String, dynamic>)
           : null,
-      intensite: (json['intensite'] as num).toInt(),
+      intensite: (json['intensite'] is num)
+          ? (json['intensite'] as num).toInt()
+          : (int.tryParse(json['intensite']?.toString() ?? '1') ?? 1),
       notes: json['notes'] as String?,
     );
   }
@@ -352,15 +368,17 @@ class DayObservationsModel extends Equatable {
   });
 
   factory DayObservationsModel.fromJson(Map<String, dynamic> json) {
+    String rawDate = (json['date'] as String? ?? '').trim();
+    if (rawDate.length >= 10) rawDate = rawDate.substring(0, 10);
     return DayObservationsModel(
-      date: json['date'] as String,
+      date: rawDate,
       temperature: json['temperature'] != null
           ? TemperatureBasaleModel.fromJson(json['temperature'] as Map<String, dynamic>)
           : null,
       glaire: json['glaire'] != null
           ? GlaireCervicaleModel.fromJson(json['glaire'] as Map<String, dynamic>)
           : null,
-      testsLh: (json['testsLh'] as List<dynamic>?)
+      testsLh: ((json['testsLh'] ?? json['tests_lh']) as List<dynamic>?)
               ?.map((e) => TestOvulationModel.fromJson(e as Map<String, dynamic>))
               .toList() ??
           [],
@@ -400,9 +418,9 @@ class SaveDayObservationRequest {
   Map<String, dynamic> toJson() {
     return {
       'date': date,
-      if (temperature != null) 'temperature': temperature!.toJson(),
-      if (glaire != null) 'glaire': glaire!.toJson(),
-      if (testLh != null) 'testLh': testLh!.toJson(),
+      if (temperature != null) 'temperature': {...temperature!.toJson(), 'date': date},
+      if (glaire != null) 'glaire': {...glaire!.toJson(), 'date': date},
+      if (testLh != null) 'testLh': {...testLh!.toJson(), 'date': date},
       if (symptomes != null && symptomes!.isNotEmpty)
         'symptomes': symptomes!
             .map((s) => {

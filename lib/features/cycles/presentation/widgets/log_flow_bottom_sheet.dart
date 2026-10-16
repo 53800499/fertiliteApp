@@ -4,9 +4,14 @@ import '../../../../core/theme/app_theme.dart';
 import '../../data/models/cycle_models.dart';
 import '../bloc/cycle_bloc.dart';
 import '../bloc/cycle_event.dart';
+import '../../../fertility/presentation/bloc/fertility_bloc.dart';
+import '../../../observations/presentation/bloc/observation_bloc.dart';
+import '../../../observations/presentation/bloc/observation_event.dart';
 import '../../../../core/network/network_cubit.dart';
 import '../../../../core/error/api_exception.dart';
 import '../../../../core/error/error_feedback.dart';
+import '../../../../core/widgets/app_feedback.dart';
+import '../../../../core/di/service_locator.dart';
 
 class LogFlowBottomSheet extends StatefulWidget {
   final DateTime initialDate;
@@ -18,17 +23,44 @@ class LogFlowBottomSheet extends StatefulWidget {
     this.existingJour,
   });
 
-  static Future<void> show(
+  static Future<JourReglesModel?> show(
     BuildContext context, {
     required DateTime date,
     JourReglesModel? existingJour,
+    bool useRootNavigator = true,
   }) {
-    return showModalBottomSheet(
+    CycleBloc cycleBloc;
+    try {
+      cycleBloc = context.read<CycleBloc>();
+    } catch (_) {
+      cycleBloc = ServiceLocator.cycleBloc;
+    }
+
+    FertilityBloc fertBloc;
+    try {
+      fertBloc = context.read<FertilityBloc>();
+    } catch (_) {
+      fertBloc = ServiceLocator.fertilityBloc;
+    }
+
+    ObservationBloc obsBloc;
+    try {
+      obsBloc = context.read<ObservationBloc>();
+    } catch (_) {
+      obsBloc = ServiceLocator.observationBloc;
+    }
+
+    return showModalBottomSheet<JourReglesModel>(
       context: context,
       isScrollControlled: true,
+      useRootNavigator: useRootNavigator,
       backgroundColor: Colors.transparent,
-      builder: (_) => BlocProvider.value(
-        value: context.read<CycleBloc>(),
+      builder: (_) => MultiBlocProvider(
+        providers: [
+          BlocProvider.value(value: cycleBloc),
+          BlocProvider.value(value: fertBloc),
+          BlocProvider.value(value: obsBloc),
+        ],
         child: LogFlowBottomSheet(
           initialDate: date,
           existingJour: existingJour,
@@ -47,6 +79,7 @@ class _LogFlowBottomSheetState extends State<LogFlowBottomSheet> {
   late int _douleur;
   final _notesController = TextEditingController();
   bool _isNewCycleStart = false;
+  bool _isSaving = false;
 
   final List<Map<String, dynamic>> _intensities = [
     {'key': 'absent', 'label': 'Aucun', 'drops': 0, 'color': Colors.grey},
@@ -71,13 +104,13 @@ class _LogFlowBottomSheetState extends State<LogFlowBottomSheet> {
     super.dispose();
   }
 
-  void _save() {
+  Future<void> _save() async {
     bool isOnline = true;
     try {
       isOnline = BlocProvider.of<NetworkCubit>(context, listen: false).state.isOnline;
     } catch (_) {}
     if (!isOnline) {
-      AppErrorFeedback.showSnackBar(
+      AppFeedback.showError(
         context,
         error: const ApiException(
           title: 'Mode hors ligne',
@@ -94,44 +127,164 @@ class _LogFlowBottomSheetState extends State<LogFlowBottomSheet> {
         "${_selectedDate.year.toString().padLeft(4, '0')}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.day.toString().padLeft(2, '0')}";
 
     if (_isNewCycleStart) {
-      // Début d'un nouveau cycle (UC-07)
-      context.read<CycleBloc>().add(
-            StartNewCycleEvent(
-              StartCycleRequestModel(
-                dateDebut: dateStr,
-                intensiteFlux: _intensite,
-                douleurNiveau: _douleur,
-                notes: _notesController.text.trim().isNotEmpty ? _notesController.text.trim() : null,
-              ),
-            ),
-          );
-    } else {
-      // Saisie de flux ordinaire (UC-08)
-      context.read<CycleBloc>().add(
-            LogDayFlowEvent(
-              LogFlowRequestModel(
+      if (_intensite == 'absent') {
+        AppFeedback.showWarning(
+          context,
+          title: 'Flux menstruel requis',
+          message: 'Le début d\'un cycle menstruel nécessite de renseigner un flux (léger, moyen ou abondant).',
+        );
+        return;
+      }
+
+      // Modal de confirmation ergonomique pour démarrage de cycle (UC-07)
+      final confirmed = await AppFeedback.showConfirmationDialog(
+        context,
+        title: 'Démarrer un nouveau cycle ?',
+        message: 'Cette action valide le 1er jour de vos règles et clôture votre cycle actuel au ${_selectedDate.day}/${_selectedDate.month}/${_selectedDate.year}.',
+        confirmLabel: 'Démarrer le cycle',
+        cancelLabel: 'Annuler',
+        icon: Icons.calendar_today_rounded,
+        confirmColor: AppTheme.primary,
+      );
+      if (!confirmed || !mounted) return;
+
+      setState(() => _isSaving = true);
+      try {
+        final newCycle = await ServiceLocator.cycleRepository.startCycle(
+          StartCycleRequestModel(
+            dateDebut: dateStr,
+            intensiteFlux: _intensite,
+            douleurNiveau: _douleur,
+            notes: _notesController.text.trim().isNotEmpty ? _notesController.text.trim() : null,
+          ),
+        );
+        final firstDay = newCycle.joursRegles.isNotEmpty
+            ? newCycle.joursRegles.first
+            : JourReglesModel(
+                id: '',
+                cycleId: newCycle.id,
                 date: dateStr,
                 intensiteFlux: _intensite,
                 douleurNiveau: _douleur,
                 notes: _notesController.text.trim().isNotEmpty ? _notesController.text.trim() : null,
-              ),
-            ),
-          );
+              );
+        if (!mounted) return;
+        try {
+          context.read<CycleBloc>().add(LoadCyclesEvent());
+        } catch (_) {
+          ServiceLocator.cycleBloc.add(LoadCyclesEvent());
+        }
+        try {
+          context.read<FertilityBloc>().add(const LoadCurrentFertilityEvent());
+          context.read<FertilityBloc>().add(LoadMonthCalendarEvent(
+                year: _selectedDate.year,
+                month: _selectedDate.month,
+              ));
+        } catch (_) {
+          ServiceLocator.fertilityBloc.add(const LoadCurrentFertilityEvent());
+          ServiceLocator.fertilityBloc.add(LoadMonthCalendarEvent(
+                year: _selectedDate.year,
+                month: _selectedDate.month,
+              ));
+        }
+        AppFeedback.showSuccess(
+          context,
+          title: 'Nouveau cycle démarré 🌸',
+          message: 'Vos règles ont été enregistrées comme Jour 1 de votre nouveau cycle.',
+        );
+        Navigator.of(context).pop(firstDay);
+      } catch (e) {
+        if (!mounted) return;
+        AppFeedback.showError(
+          context,
+          error: e,
+          customTitle: 'Démarrage du cycle impossible',
+        );
+      } finally {
+        if (mounted) setState(() => _isSaving = false);
+      }
+    } else {
+      // Saisie de flux ordinaire (UC-08)
+      setState(() => _isSaving = true);
+      try {
+        final savedJour = await ServiceLocator.cycleRepository.logDayFlow(
+          LogFlowRequestModel(
+            date: dateStr,
+            intensiteFlux: _intensite,
+            douleurNiveau: _douleur,
+            notes: _notesController.text.trim().isNotEmpty ? _notesController.text.trim() : null,
+          ),
+        );
+        if (!mounted) return;
+        try {
+          context.read<CycleBloc>().add(LoadCyclesEvent());
+        } catch (_) {
+          ServiceLocator.cycleBloc.add(LoadCyclesEvent());
+        }
+        try {
+          context.read<FertilityBloc>().add(const LoadCurrentFertilityEvent());
+          context.read<FertilityBloc>().add(LoadMonthCalendarEvent(
+                year: _selectedDate.year,
+                month: _selectedDate.month,
+              ));
+        } catch (_) {
+          ServiceLocator.fertilityBloc.add(const LoadCurrentFertilityEvent());
+          ServiceLocator.fertilityBloc.add(LoadMonthCalendarEvent(
+                year: _selectedDate.year,
+                month: _selectedDate.month,
+              ));
+        }
+        try {
+          context.read<ObservationBloc>().add(LoadDayObservationsEvent(dateStr));
+        } catch (_) {
+          ServiceLocator.observationBloc.add(LoadDayObservationsEvent(dateStr));
+        }
+        AppFeedback.showSuccess(
+          context,
+          title: 'Flux menstruel enregistré ✨',
+          message: 'Votre suivi du ${_selectedDate.day}/${_selectedDate.month} a été mis à jour.',
+        );
+        Navigator.of(context).pop(savedJour);
+      } catch (e) {
+        if (!mounted) return;
+        AppFeedback.showError(
+          context,
+          error: e,
+          customTitle: 'Enregistrement impossible',
+        );
+      } finally {
+        if (mounted) setState(() => _isSaving = false);
+      }
     }
-
-    Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(_isNewCycleStart ? 'Nouveau cycle démarré avec succès !' : 'Observations enregistrées.'),
-        backgroundColor: Colors.teal,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final hasChanges = _notesController.text.trim() != (widget.existingJour?.notes ?? '') ||
+            _intensite != (widget.existingJour?.intensiteFlux ?? 'moyen') ||
+            _isNewCycleStart;
+        if (hasChanges) {
+          final discard = await AppFeedback.showConfirmationDialog(
+            context,
+            title: 'Abandonner la saisie ?',
+            message: 'Les observations en cours de modification ne seront pas enregistrées.',
+            confirmLabel: 'Abandonner',
+            cancelLabel: 'Continuer la saisie',
+            isDestructive: true,
+            icon: Icons.close_rounded,
+          );
+          if (discard && context.mounted) {
+            Navigator.pop(context);
+          }
+        } else {
+          Navigator.pop(context);
+        }
+      },
+      child: Container(
       padding: EdgeInsets.only(
         top: 20,
         left: 24,
@@ -368,19 +521,26 @@ class _LogFlowBottomSheetState extends State<LogFlowBottomSheet> {
                 boxShadow: AppTheme.floatingShadow,
               ),
               child: ElevatedButton(
-                onPressed: _save,
+                onPressed: _isSaving ? null : _save,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.transparent,
                   shadowColor: Colors.transparent,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 ),
-                child: const Text('Enregistrer les observations', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
+                child: _isSaving
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Text('Enregistrer le flux', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
               ),
             ),
           ],
         ),
       ),
+    ),
     );
   }
 

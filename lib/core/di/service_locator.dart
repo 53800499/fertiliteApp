@@ -23,6 +23,8 @@ import '../../features/observations/presentation/bloc/observation_bloc.dart';
 import '../../features/fertility/data/datasources/fertility_remote_data_source.dart';
 import '../../features/fertility/data/repositories/fertility_repository_impl.dart';
 import '../../features/fertility/domain/repositories/fertility_repository.dart';
+import '../../features/auth/presentation/bloc/auth_state.dart';
+import '../../features/auth/data/models/auth_models.dart';
 import '../../features/fertility/presentation/bloc/fertility_bloc.dart';
 
 class ServiceLocator {
@@ -58,9 +60,30 @@ class ServiceLocator {
   static late final IFertilityRepository fertilityRepository;
   static late final FertilityBloc fertilityBloc;
 
-  static void init({String? baseUrl, void Function()? onSessionExpired}) {
+  static Future<void> init({String? baseUrl, void Function()? onSessionExpired}) async {
     storage = SecureStorageHelper();
     networkCubit = NetworkCubit();
+
+    // Résolution immédiate de l'état de session pour éliminer tout loader au démarrage
+    AuthState initialAuthState = AuthInitialState();
+    try {
+      final isAuth = await storage.hasAccessToken();
+      if (isAuth) {
+        final userId = await storage.getUserId();
+        final email = await storage.getUserEmail();
+        initialAuthState = AuthenticatedState(
+          AuthUserModel(
+            id: userId ?? '',
+            email: email ?? '',
+            emailVerified: true,
+          ),
+        );
+      } else {
+        initialAuthState = UnauthenticatedState();
+      }
+    } catch (_) {
+      initialAuthState = UnauthenticatedState();
+    }
 
     apiClient = ApiClient(
       baseUrl: baseUrl,
@@ -82,7 +105,10 @@ class ServiceLocator {
       remoteDataSource: authRemoteDataSource,
       storage: storage,
     );
-    authBloc = AuthBloc(authRepository: authRepository);
+    authBloc = AuthBloc(
+      authRepository: authRepository,
+      initialState: initialAuthState,
+    );
 
     // Users (avec cache hors-ligne)
     userRemoteDataSource = UserRemoteDataSourceImpl(

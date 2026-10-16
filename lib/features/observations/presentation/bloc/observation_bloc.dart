@@ -8,6 +8,7 @@ import 'observation_state.dart';
 class ObservationBloc extends Bloc<ObservationEvent, ObservationState> {
   final IObservationRepository observationRepository;
   List<TypeSymptomeModel> cachedCatalog = [];
+  final Map<String, DayObservationsModel> cachedDays = {};
 
   ObservationBloc({required this.observationRepository})
       : super(ObservationInitialState()) {
@@ -35,7 +36,17 @@ class ObservationBloc extends Bloc<ObservationEvent, ObservationState> {
     LoadDayObservationsEvent event,
     Emitter<ObservationState> emit,
   ) async {
-    emit(ObservationLoadingState());
+    final normalizedDate = event.date.length >= 10 ? event.date.substring(0, 10) : event.date;
+    if (cachedDays.containsKey(normalizedDate)) {
+      emit(
+        DayObservationsLoadedState(
+          observations: cachedDays[normalizedDate]!,
+          catalog: cachedCatalog,
+        ),
+      );
+    } else {
+      emit(ObservationLoadingState());
+    }
     try {
       if (cachedCatalog.isEmpty) {
         try {
@@ -43,7 +54,8 @@ class ObservationBloc extends Bloc<ObservationEvent, ObservationState> {
         } catch (_) {}
       }
 
-      final observations = await observationRepository.getDayObservations(event.date);
+      final observations = await observationRepository.getDayObservations(normalizedDate);
+      cachedDays[normalizedDate] = observations;
       emit(
         DayObservationsLoadedState(
           observations: observations,
@@ -51,9 +63,13 @@ class ObservationBloc extends Bloc<ObservationEvent, ObservationState> {
         ),
       );
     } on ApiException catch (e) {
-      emit(ObservationFailureState(e.message));
+      if (!cachedDays.containsKey(normalizedDate)) {
+        emit(ObservationFailureState(e.message));
+      }
     } catch (e) {
-      emit(ObservationFailureState('Erreur lors du chargement des observations: $e'));
+      if (!cachedDays.containsKey(normalizedDate)) {
+        emit(ObservationFailureState('Erreur lors du chargement des observations: $e'));
+      }
     }
   }
 
@@ -61,19 +77,14 @@ class ObservationBloc extends Bloc<ObservationEvent, ObservationState> {
     SaveDayObservationEvent event,
     Emitter<ObservationState> emit,
   ) async {
-    emit(ObservationLoadingState());
     try {
       final updated = await observationRepository.saveDayObservation(event.request);
+      final normalizedDate = updated.date.length >= 10 ? updated.date.substring(0, 10) : updated.date;
+      cachedDays[normalizedDate] = updated;
       emit(
         DayObservationsLoadedState(
           observations: updated,
           catalog: cachedCatalog,
-        ),
-      );
-      emit(
-        ObservationSuccessState(
-          message: 'Observations enregistrées avec succès',
-          updatedObservations: updated,
         ),
       );
     } on ApiException catch (e) {

@@ -3,7 +3,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'core/theme/app_theme.dart';
 import 'core/di/service_locator.dart';
 import 'features/auth/presentation/bloc/auth_bloc.dart';
-import 'features/auth/presentation/bloc/auth_event.dart';
 import 'features/auth/presentation/bloc/auth_state.dart';
 import 'features/auth/presentation/screens/onboarding_screen.dart';
 import 'features/navigation/main_navigation_screen.dart';
@@ -13,12 +12,9 @@ import 'core/network/network_cubit.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialisation du conteneur de services & client API
-  ServiceLocator.init();
+  // Initialisation du conteneur de services & client API avec pré-résolution de session
+  await ServiceLocator.init();
   ServiceLocator.networkCubit.checkConnectivity(silent: true);
-
-  // Vérification de la session active existante
-  ServiceLocator.authBloc.add(CheckAuthStatusEvent());
 
   runApp(const FertiliteApp());
 }
@@ -55,21 +51,44 @@ class AuthWrapper extends StatelessWidget {
         } else if (state is UnauthenticatedState || state is AuthFailureState) {
           return const OnboardingScreen();
         }
-        // Splash / Chargement initial
-        return const Scaffold(
-          backgroundColor: Color(0xFFFAF7F9),
+        // Écran de transition soigné aux couleurs FEMAX
+        return Scaffold(
+          backgroundColor: AppTheme.background,
           body: Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                CircularProgressIndicator(color: Color(0xFF8E24AA)),
-                SizedBox(height: 16),
-                Text(
-                  'FertiliteApp',
+                Container(
+                  width: 76,
+                  height: 76,
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryLight.withValues(alpha: 0.35),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Center(
+                    child: Icon(
+                      Icons.spa_rounded,
+                      size: 40,
+                      color: AppTheme.primary,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                const Text(
+                  'FEMAX',
                   style: TextStyle(
-                    fontSize: 20,
+                    fontSize: 22,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF37474F),
+                    letterSpacing: 1.2,
+                    color: AppTheme.textDark,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Santé Féminine & Fertilité',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: AppTheme.textMuted,
                   ),
                 ),
               ],

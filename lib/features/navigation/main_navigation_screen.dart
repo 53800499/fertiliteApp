@@ -24,6 +24,7 @@ class MainNavigationScreen extends StatefulWidget {
 
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _currentIndex = 0;
+  final Set<int> _loadedTabs = {0};
 
   final List<Widget> _tabs = const [
     CalendarScreen(),
@@ -31,6 +32,13 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     CycleStatsScreen(),
     ProfileScreen(),
   ];
+
+  void _onTabTapped(int index) {
+    setState(() {
+      _currentIndex = index;
+      _loadedTabs.add(index);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -54,7 +62,12 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             children: [
               IndexedStack(
                 index: _currentIndex,
-                children: _tabs,
+                children: List.generate(
+                  _tabs.length,
+                  (index) => _loadedTabs.contains(index)
+                      ? _tabs[index]
+                      : const SizedBox.shrink(),
+                ),
               ),
               // Bandeau flottant contextuel sans décalage de layout
               const Positioned(
@@ -69,7 +82,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             builder: (context, netState) {
               return ModernFloatingNavBar(
                 currentIndex: _currentIndex,
-                onTap: (idx) => setState(() => _currentIndex = idx),
+                onTap: _onTabTapped,
                 isOffline: !netState.isOnline,
                 items: const [
                   ModernNavItem(

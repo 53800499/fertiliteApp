@@ -7,6 +7,9 @@ class AuthInterceptor extends QueuedInterceptor {
   final Dio dio;
   final void Function()? onSessionExpired;
 
+  // Mutex de déduplication pour éviter les collisions sur la rotation des Refresh Tokens
+  Future<String?>? _refreshFuture;
+
   AuthInterceptor({
     required this.storage,
     required this.dio,
@@ -31,58 +34,82 @@ class AuthInterceptor extends QueuedInterceptor {
     return handler.next(options);
   }
 
+  Future<String?> _performTokenRefresh() async {
+    final refreshToken = await storage.getRefreshToken();
+    if (refreshToken == null || refreshToken.isEmpty) {
+      await storage.clearAllTokens();
+      onSessionExpired?.call();
+      return null;
+    }
+
+    final refreshDio = Dio(
+      BaseOptions(
+        baseUrl: dio.options.baseUrl,
+        connectTimeout: ApiConstants.connectTimeout,
+        receiveTimeout: ApiConstants.receiveTimeout,
+        sendTimeout: ApiConstants.sendTimeout,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+      ),
+    );
+
+    try {
+      final response = await refreshDio.post(
+        ApiConstants.authRefresh,
+        data: {'refreshToken': refreshToken},
+      );
+
+      if (response.statusCode == 200 && response.data != null) {
+        final data = response.data;
+        final tokens = data['tokens'] ?? data;
+        final newAccessToken = tokens['accessToken'] as String?;
+        final newRefreshToken = tokens['refreshToken'] as String?;
+
+        if (newAccessToken != null && newAccessToken.isNotEmpty) {
+          await storage.saveAccessToken(newAccessToken);
+          if (newRefreshToken != null && newRefreshToken.isNotEmpty) {
+            await storage.saveRefreshToken(newRefreshToken);
+          }
+          return newAccessToken;
+        }
+      }
+      throw Exception('Format de jeton invalide lors du renouvellement');
+    } catch (e) {
+      await storage.clearAllTokens();
+      onSessionExpired?.call();
+      rethrow;
+    }
+  }
+
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) async {
-    // Gestion du token expiré (401)
-    if (err.response?.statusCode == 401 &&
-        !err.requestOptions.path.contains(ApiConstants.authRefresh) &&
-        !err.requestOptions.path.contains(ApiConstants.authLogin)) {
+    final path = err.requestOptions.path;
+    final isAuthEndpoint = path.contains(ApiConstants.authRefresh) ||
+        path.contains(ApiConstants.authLogin) ||
+        path.contains(ApiConstants.authRegister) ||
+        path.contains(ApiConstants.authLogout);
+
+    // Gestion centralisée et thread-safe du token expiré (401)
+    if (err.response?.statusCode == 401 && !isAuthEndpoint) {
       try {
-        final refreshToken = await storage.getRefreshToken();
-        if (refreshToken != null && refreshToken.isNotEmpty) {
-          // Requête dédiée avec une instance Dio isolée sans intercepteur pour éviter une boucle infinie
-          final refreshDio = Dio(
-            BaseOptions(
-              baseUrl: dio.options.baseUrl,
-              connectTimeout: ApiConstants.connectTimeout,
-              receiveTimeout: ApiConstants.receiveTimeout,
-              headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-              },
-            ),
-          );
+        _refreshFuture ??= _performTokenRefresh();
+        final newAccessToken = await _refreshFuture;
 
-          final response = await refreshDio.post(
-            ApiConstants.authRefresh,
-            data: {'refreshToken': refreshToken},
-          );
+        if (newAccessToken != null && newAccessToken.isNotEmpty) {
+          // Rejouer la requête d'origine avec le nouveau jeton
+          final options = err.requestOptions;
+          options.headers['Authorization'] = 'Bearer $newAccessToken';
 
-          if (response.statusCode == 200 && response.data != null) {
-            final data = response.data;
-            final tokens = data['tokens'] ?? data;
-            final newAccessToken = tokens['accessToken'];
-            final newRefreshToken = tokens['refreshToken'];
-
-            if (newAccessToken != null) {
-              await storage.saveAccessToken(newAccessToken);
-              if (newRefreshToken != null) {
-                await storage.saveRefreshToken(newRefreshToken);
-              }
-
-              // Rejouer la requête d'origine avec le nouveau jeton
-              final options = err.requestOptions;
-              options.headers['Authorization'] = 'Bearer $newAccessToken';
-
-              final retryResponse = await dio.fetch(options);
-              return handler.resolve(retryResponse);
-            }
-          }
+          final retryResponse = await dio.fetch(options);
+          return handler.resolve(retryResponse);
         }
       } catch (e) {
-        // En cas d'échec du refresh (ex: refresh token révoqué ou expiré)
-        await storage.clearAllTokens();
-        onSessionExpired?.call();
+        // En cas d'échec du refresh, la session est déjà purgée dans _performTokenRefresh
+        return handler.next(err);
+      } finally {
+        _refreshFuture = null;
       }
     }
 

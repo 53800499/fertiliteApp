@@ -32,10 +32,10 @@ class ApiConstants {
     return productionBaseUrl;
   }
 
-  // Timeouts réseau
-  static const Duration connectTimeout = Duration(seconds: 15);
-  static const Duration receiveTimeout = Duration(seconds: 15);
-  static const Duration sendTimeout = Duration(seconds: 15);
+  // Timeouts réseau (ajustés pour supporter le démarrage à froid de Render.com de 40-60s)
+  static const Duration connectTimeout = Duration(seconds: 60);
+  static const Duration receiveTimeout = Duration(seconds: 60);
+  static const Duration sendTimeout = Duration(seconds: 60);
 
   // --- Endpoints Auth (Module 1) ---
   static const String authRegister = '/auth/register';

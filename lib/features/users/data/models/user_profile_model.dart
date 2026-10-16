@@ -4,32 +4,60 @@ class UserProfileDetailModel {
   final int dureeMoyenneRegles;
   final String objectifPrincipal;
   final bool irregulariteDeclaree;
+  final String? dateDernieresReglesConnues;
 
   const UserProfileDetailModel({
     this.prenom,
     this.dureeMoyenneCycle = 28,
     this.dureeMoyenneRegles = 5,
-    this.objectifPrincipal = 'concevoir',
+    this.objectifPrincipal = 'suivi_cycle',
     this.irregulariteDeclaree = false,
+    this.dateDernieresReglesConnues,
   });
 
   factory UserProfileDetailModel.fromJson(Map<String, dynamic>? json) {
     if (json == null) return const UserProfileDetailModel();
+
+    // Normalisation de l'objectif
+    String rawObj = (json['objectifPrincipal'] ?? json['objectif_principal'] ?? 'suivi_cycle').toString();
+    if (rawObj == 'concevoir') rawObj = 'planifier_grossesse';
+    if (rawObj == 'contraception_naturelle') rawObj = 'eviter_grossesse';
+    if (rawObj == 'suivre_cycle') rawObj = 'suivi_cycle';
+
+    final rawIrreg = json['irregulariteDeclaree'] ?? json['irregularite_declaree'];
+    final bool isIrreg = rawIrreg is bool
+        ? rawIrreg
+        : (rawIrreg == 1 || rawIrreg == '1' || rawIrreg == 'true');
+
     return UserProfileDetailModel(
-      prenom: json['prenom'] as String?,
-      dureeMoyenneCycle: (json['dureeMoyenneCycle'] as num?)?.toInt() ?? 28,
-      dureeMoyenneRegles: (json['dureeMoyenneRegles'] as num?)?.toInt() ?? 5,
-      objectifPrincipal: json['objectifPrincipal'] as String? ?? 'concevoir',
-      irregulariteDeclaree: json['irregulariteDeclaree'] as bool? ?? false,
+      prenom: (json['prenom'] ?? json['nom']) as String?,
+      dureeMoyenneCycle: ((json['dureeCycleHabituelleJours'] ??
+              json['duree_cycle_habituelle_jours'] ??
+              json['dureeMoyenneCycle'] ??
+              28) as num)
+          .toInt(),
+      dureeMoyenneRegles: ((json['dureeReglesHabituelleJours'] ??
+              json['duree_regles_habituelle_jours'] ??
+              json['dureeMoyenneRegles'] ??
+              5) as num)
+          .toInt(),
+      objectifPrincipal: rawObj,
+      irregulariteDeclaree: isIrreg,
+      dateDernieresReglesConnues: (json['dateDernieresReglesConnues'] ??
+          json['date_dernieres_regles_connues']) as String?,
     );
   }
 
   Map<String, dynamic> toJson() => {
         if (prenom != null) 'prenom': prenom,
         'dureeMoyenneCycle': dureeMoyenneCycle,
+        'dureeCycleHabituelleJours': dureeMoyenneCycle,
         'dureeMoyenneRegles': dureeMoyenneRegles,
+        'dureeReglesHabituelleJours': dureeMoyenneRegles,
         'objectifPrincipal': objectifPrincipal,
         'irregulariteDeclaree': irregulariteDeclaree,
+        if (dateDernieresReglesConnues != null)
+          'dateDernieresReglesConnues': dateDernieresReglesConnues,
       };
 }
 
@@ -84,15 +112,23 @@ class FullUserProfileModel {
   });
 
   factory FullUserProfileModel.fromJson(Map<String, dynamic> json) {
+    // Si la réponse contient la clé 'profil' imbriquée
+    // ou si json est directement l'entité ProfilUtilisateur
+    final Map<String, dynamic>? profilJson = (json.containsKey('profil') && json['profil'] is Map<String, dynamic>)
+        ? json['profil'] as Map<String, dynamic>
+        : (json.containsKey('dureeCycleHabituelleJours') ||
+                json.containsKey('dureeMoyenneCycle') ||
+                json.containsKey('objectifPrincipal')
+            ? json
+            : null);
+
     return FullUserProfileModel(
-      id: json['id'] as String? ?? '',
+      id: json['id'] as String? ?? json['utilisateurId'] as String? ?? '',
       email: json['email'] as String? ?? '',
       dateNaissance: json['dateNaissance'] as String?,
       languePreferee: json['languePreferee'] as String? ?? 'fr',
       fuseauHoraire: json['fuseauHoraire'] as String? ?? 'Africa/Porto-Novo',
-      profil: UserProfileDetailModel.fromJson(
-        json['profil'] as Map<String, dynamic>?,
-      ),
+      profil: UserProfileDetailModel.fromJson(profilJson),
       parametresConfidentialite: UserPrivacySettingsModel.fromJson(
         json['parametresConfidentialite'] as Map<String, dynamic>?,
       ),
@@ -116,6 +152,7 @@ class UpdateProfileRequestModel {
   final int? dureeMoyenneRegles;
   final String? objectifPrincipal;
   final bool? irregulariteDeclaree;
+  final String? dateDernieresReglesConnues;
   final UserPrivacySettingsModel? parametresConfidentialite;
 
   const UpdateProfileRequestModel({
@@ -124,16 +161,35 @@ class UpdateProfileRequestModel {
     this.dureeMoyenneRegles,
     this.objectifPrincipal,
     this.irregulariteDeclaree,
+    this.dateDernieresReglesConnues,
     this.parametresConfidentialite,
   });
 
-  Map<String, dynamic> toJson() => {
-        if (prenom != null) 'prenom': prenom,
-        if (dureeMoyenneCycle != null) 'dureeMoyenneCycle': dureeMoyenneCycle,
-        if (dureeMoyenneRegles != null) 'dureeMoyenneRegles': dureeMoyenneRegles,
-        if (objectifPrincipal != null) 'objectifPrincipal': objectifPrincipal,
-        if (irregulariteDeclaree != null) 'irregulariteDeclaree': irregulariteDeclaree,
-        if (parametresConfidentialite != null)
-          'parametresConfidentialite': parametresConfidentialite!.toJson(),
-      };
+  Map<String, dynamic> toJson() {
+    String? normalizedObjective = objectifPrincipal;
+    if (normalizedObjective == 'concevoir') normalizedObjective = 'planifier_grossesse';
+    if (normalizedObjective == 'contraception_naturelle') normalizedObjective = 'eviter_grossesse';
+    if (normalizedObjective == 'suivre_cycle') normalizedObjective = 'suivi_cycle';
+
+    final data = <String, dynamic>{};
+    if (prenom != null) data['prenom'] = prenom;
+    if (dureeMoyenneCycle != null) {
+      data['dureeCycleHabituelleJours'] = dureeMoyenneCycle;
+      data['dureeMoyenneCycle'] = dureeMoyenneCycle;
+    }
+    if (dureeMoyenneRegles != null) {
+      data['dureeReglesHabituelleJours'] = dureeMoyenneRegles;
+      data['dureeMoyenneRegles'] = dureeMoyenneRegles;
+    }
+    if (normalizedObjective != null) {
+      data['objectifPrincipal'] = normalizedObjective;
+    }
+    if (irregulariteDeclaree != null) {
+      data['irregulariteDeclaree'] = irregulariteDeclaree;
+    }
+    if (dateDernieresReglesConnues != null) {
+      data['dateDernieresReglesConnues'] = dateDernieresReglesConnues;
+    }
+    return data;
+  }
 }
