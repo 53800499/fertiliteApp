@@ -43,12 +43,21 @@ class ActiveSessionModel {
   });
 
   factory ActiveSessionModel.fromJson(Map<String, dynamic> json) {
+    final rawDate = (json['dateDerniereUtilisation'] ??
+            json['dateConnexion'] ??
+            json['dateCreation'] ??
+            json['createdAt'] ??
+            '')
+        .toString();
+
     return ActiveSessionModel(
       id: json['id'] as String? ?? '',
-      nomAppareil: json['nomAppareil'] as String? ?? 'Appareil mobile',
+      nomAppareil: (json['nomAppareil'] as String?)?.isNotEmpty == true
+          ? json['nomAppareil'] as String
+          : 'Appareil mobile',
       plateforme: json['plateforme'] as String? ?? 'android',
-      dateConnexion: json['dateConnexion'] as String? ?? '',
-      derniereActivite: json['derniereActivite'] as String?,
+      dateConnexion: rawDate,
+      derniereActivite: (json['derniereActivite'] ?? json['dateDerniereUtilisation']) as String?,
     );
   }
 }

@@ -513,7 +513,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
         accentColor = Colors.teal.shade700;
         headerIcon = Icons.shield_rounded;
         title = 'Mode Observation & Prudence';
-        subtitle = 'FEMAX applique une marge de sécurité accrue pour différer naturellement :';
+        subtitle = 'FertiliteApp applique une marge de sécurité accrue pour différer naturellement :';
         points = [
           {
             'title': 'Zone de précaution active',
@@ -535,7 +535,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
         accentColor = Colors.purple.shade700;
         headerIcon = Icons.auto_awesome_rounded;
         title = 'Mode Saisons Hormonales & Vitalité';
-        subtitle = 'FEMAX décrypte l\'impact de vos hormones sur votre bien-être :';
+        subtitle = 'FertiliteApp décrypte l\'impact de vos hormones sur votre bien-être :';
         points = [
           {
             'title': 'Les 4 saisons du cycle',
@@ -559,7 +559,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
         accentColor = AppTheme.primary;
         headerIcon = Icons.calendar_today_rounded;
         title = 'Mode Prévision & Suivi de Cycle';
-        subtitle = 'FEMAX vous apporte sérénité et clarté sur vos repères :';
+        subtitle = 'FertiliteApp vous apporte sérénité et clarté sur vos repères :';
         points = [
           {
             'title': 'Compte à rebours des règles',

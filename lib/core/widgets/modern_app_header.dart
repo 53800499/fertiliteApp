@@ -5,7 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../network/network_cubit.dart';
 import '../theme/app_theme.dart';
 
-/// Header moderne, épuré et ultra-professionnel aux standards d'applications de santé haut de gamme (FEMAX)
+/// Header moderne, épuré et ultra-professionnel aux standards d'applications de santé haut de gamme (FertiliteApp)
 class ModernAppHeader extends StatelessWidget implements PreferredSizeWidget {
   final String title;
   final String? subtitle;
@@ -223,7 +223,7 @@ class ModernAppHeader extends StatelessWidget implements PreferredSizeWidget {
   }
 }
 
-/// Bouton d'action standardisé, raffiné et haptique pour les headers FEMAX
+/// Bouton d'action standardisé, raffiné et haptique pour les headers FertiliteApp
 class ModernHeaderIconButton extends StatelessWidget {
   final IconData icon;
   final String tooltip;

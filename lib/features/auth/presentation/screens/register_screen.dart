@@ -155,7 +155,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             AppFeedback.showSuccess(
               context,
               title: 'Compte créé avec succès 🎉',
-              message: 'Bienvenue sur FEMAX ! Votre espace santé et fertilité est prêt.',
+              message: 'Bienvenue sur FertiliteApp ! Votre espace santé et fertilité est prêt.',
             );
             Navigator.maybePop(context);
           }

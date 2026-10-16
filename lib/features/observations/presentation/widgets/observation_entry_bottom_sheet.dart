@@ -3,13 +3,13 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../data/models/observation_models.dart';
+import '../../data/datasources/observation_sync_manager.dart';
 import '../bloc/observation_bloc.dart';
 import '../bloc/observation_event.dart';
 import '../../../fertility/presentation/bloc/fertility_bloc.dart';
 import '../../../cycles/presentation/bloc/cycle_bloc.dart';
 import '../../../cycles/presentation/bloc/cycle_event.dart';
 import '../../../../core/network/network_cubit.dart';
-import '../../../../core/error/api_exception.dart';
 import '../../../../core/error/error_feedback.dart';
 import '../../../../core/widgets/app_feedback.dart';
 import '../../../../core/di/service_locator.dart';
@@ -92,6 +92,13 @@ class _ObservationEntryBottomSheetState
   // 4. Symptômes state (Map<code, int (1-5)>)
   final Map<String, int> _selectedSymptoms = {};
 
+  // 5. Intimité / Rapport state (UC-24)
+  bool _enableIntercourse = false;
+  String _typeRapport = TypeRapport.nonProtege;
+  String? _heureRapport;
+  bool _contraceptionUrgence = false;
+  final TextEditingController _notesIntercourseController = TextEditingController();
+
   final List<String> _perturbateurs = [
     'Fièvre / Maladie',
     'Alcool la veille',
@@ -103,7 +110,7 @@ class _ObservationEntryBottomSheetState
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
     _initExistingValues();
   }
 
@@ -138,6 +145,14 @@ class _ObservationEntryBottomSheetState
       final code = s.typeSymptome?.code ?? s.typeSymptomeId;
       _selectedSymptoms[code] = s.intensite;
     }
+
+    if (obs.rapport != null) {
+      _enableIntercourse = true;
+      _typeRapport = obs.rapport!.typeRapport;
+      _heureRapport = obs.rapport!.heure;
+      _contraceptionUrgence = obs.rapport!.contraceptionUrgence;
+      _notesIntercourseController.text = obs.rapport!.notes ?? '';
+    }
   }
 
   @override
@@ -146,6 +161,7 @@ class _ObservationEntryBottomSheetState
     _notesTempController.dispose();
     _notesGlaireController.dispose();
     _notesLhController.dispose();
+    _notesIntercourseController.dispose();
     super.dispose();
   }
 
@@ -154,19 +170,6 @@ class _ObservationEntryBottomSheetState
     try {
       isOnline = BlocProvider.of<NetworkCubit>(context, listen: false).state.isOnline;
     } catch (_) {}
-    if (!isOnline) {
-      AppFeedback.showError(
-        context,
-        error: const ApiException(
-          title: 'Mode hors ligne',
-          userFriendlyMessage:
-              'Une connexion Internet est requise pour synchroniser vos biomarqueurs et observations.',
-          actionSuggestion: 'Vérifiez votre connexion au réseau puis réessayez.',
-          errorCode: 'NETWORK_OFFLINE',
-        ),
-      );
-      return;
-    }
 
     // Validation ergonomique des bornes de température
     if (_enableTemp && (_temperature < 35.0 || _temperature > 41.5)) {
@@ -225,12 +228,27 @@ class _ObservationEntryBottomSheetState
       );
     }).toList();
 
+    RapportSexuelModel? rapportModel;
+    if (_enableIntercourse) {
+      rapportModel = RapportSexuelModel(
+        date: dateStr,
+        typeRapport: _typeRapport,
+        heure: _heureRapport,
+        contraceptionUrgence: _contraceptionUrgence,
+        notes: _notesIntercourseController.text.trim().isNotEmpty
+            ? _notesIntercourseController.text.trim()
+            : null,
+      );
+    }
+
     final req = SaveDayObservationRequest(
       date: dateStr,
       temperature: tempModel,
       glaire: glaireModel,
       testLh: lhModel,
       symptomes: symptomsList,
+      rapport: rapportModel,
+      idClientLocal: ObservationSyncManager.generateUuidV4(),
     );
 
     setState(() => _isSaving = true);
@@ -245,11 +263,20 @@ class _ObservationEntryBottomSheetState
           ));
       context.read<CycleBloc>().add(LoadCyclesEvent());
       Navigator.of(context).pop(true);
-      AppFeedback.showSuccess(
-        context,
-        title: 'Biomarqueurs enregistrés ✨',
-        message: 'Vos observations et biomarqueurs ont été enregistrés avec succès.',
-      );
+
+      if (!isOnline) {
+        AppFeedback.showInfo(
+          context,
+          title: 'Enregistré hors ligne 📦',
+          message: 'Vos biomarqueurs sont conservés localement et seront synchronisés automatiquement dès le retour de votre connexion.',
+        );
+      } else {
+        AppFeedback.showSuccess(
+          context,
+          title: 'Biomarqueurs enregistrés ✨',
+          message: 'Vos observations et biomarqueurs ont été enregistrés avec succès.',
+        );
+      }
     } catch (e) {
       if (!mounted) return;
       AppFeedback.showError(
@@ -279,10 +306,12 @@ class _ObservationEntryBottomSheetState
         final hasChanges = _enableTemp ||
             _enableGlaire ||
             _enableLh ||
+            _enableIntercourse ||
             _selectedSymptoms.isNotEmpty ||
             _notesTempController.text.trim().isNotEmpty ||
             _notesGlaireController.text.trim().isNotEmpty ||
-            _notesLhController.text.trim().isNotEmpty;
+            _notesLhController.text.trim().isNotEmpty ||
+            _notesIntercourseController.text.trim().isNotEmpty;
 
         if (hasChanges) {
           final discard = await AppFeedback.showConfirmationDialog(
@@ -357,9 +386,11 @@ class _ObservationEntryBottomSheetState
             ),
             const SizedBox(height: 12),
 
-            // Onglets (T°, Glaire, Test LH, Symptômes)
+            // Onglets (T°, Glaire, Test LH, Symptômes, Intimité)
             TabBar(
               controller: _tabController,
+              isScrollable: true,
+              tabAlignment: TabAlignment.start,
               labelColor: AppTheme.primary,
               unselectedLabelColor: AppTheme.textMuted,
               indicatorColor: AppTheme.primary,
@@ -369,6 +400,7 @@ class _ObservationEntryBottomSheetState
                 Tab(icon: Icon(Icons.water_drop_rounded, size: 20), text: 'Glaire'),
                 Tab(icon: Icon(Icons.biotech_rounded, size: 20), text: 'Test LH'),
                 Tab(icon: Icon(Icons.sentiment_satisfied_rounded, size: 20), text: 'Symptômes'),
+                Tab(icon: Icon(Icons.favorite_rounded, size: 20), text: 'Intimité'),
               ],
             ),
 
@@ -381,6 +413,7 @@ class _ObservationEntryBottomSheetState
                   _buildGlaireTab(),
                   _buildLhTab(),
                   _buildSymptomsTab(),
+                  _buildIntercourseTab(),
                 ],
               ),
             ),
@@ -728,6 +761,344 @@ class _ObservationEntryBottomSheetState
           ),
         );
       },
+    );
+  }
+
+  // --- 5. Onglet Intimité & Rapports (UC-24) ---
+  Widget _buildIntercourseTab() {
+    final isProtege = _typeRapport == TypeRapport.protege;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Switch d'activation du rapport
+          SwitchListTile(
+            title: const Text(
+              'Rapport intime ce jour',
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+            ),
+            subtitle: const Text(
+              'Suivi de la fertilité & conception naturelle',
+              style: TextStyle(fontSize: 13, color: AppTheme.textMuted),
+            ),
+            value: _enableIntercourse,
+            activeThumbColor: const Color(0xFFE91E63),
+            activeTrackColor: const Color(0xFFF8BBD0),
+            secondary: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFCE4EC),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.favorite_rounded,
+                color: Color(0xFFE91E63),
+                size: 24,
+              ),
+            ),
+            onChanged: (val) => setState(() => _enableIntercourse = val),
+          ),
+
+          if (_enableIntercourse) ...[
+            const SizedBox(height: 16),
+
+            // Badge de sécurité et chiffrement AES-256
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.teal.shade50.withValues(alpha: 0.6),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.teal.shade200, width: 1),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.lock_rounded, color: Colors.teal.shade700, size: 20),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Chiffrement applicatif AES-256-GCM actif',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.teal.shade900,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Vos données d’intimité sont chiffrées de bout en bout avant sauvegarde. Strictement confidentielles et accessibles uniquement par vous.',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.teal.shade800,
+                            height: 1.3,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            // Sélecteur de protection
+            const Text(
+              'Protection utilisée',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppTheme.textDark),
+            ),
+            const SizedBox(height: 10),
+
+            Row(
+              children: [
+                // Non protégé
+                Expanded(
+                  child: InkWell(
+                    onTap: () => setState(() => _typeRapport = TypeRapport.nonProtege),
+                    borderRadius: BorderRadius.circular(16),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: !isProtege
+                            ? const Color(0xFFFCE4EC)
+                            : Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: !isProtege
+                              ? const Color(0xFFE91E63)
+                              : Colors.grey.shade300,
+                          width: !isProtege ? 2 : 1,
+                        ),
+                      ),
+                      child: Column(
+                        children: [
+                          Icon(
+                            Icons.favorite_rounded,
+                            color: !isProtege ? const Color(0xFFE91E63) : Colors.grey,
+                            size: 28,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Non protégé',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                              color: !isProtege ? const Color(0xFFC2185B) : AppTheme.textDark,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Favorable à la conception',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: !isProtege ? const Color(0xFFC2185B) : AppTheme.textMuted,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // Protégé
+                Expanded(
+                  child: InkWell(
+                    onTap: () => setState(() => _typeRapport = TypeRapport.protege),
+                    borderRadius: BorderRadius.circular(16),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: isProtege
+                            ? AppTheme.primaryLight.withValues(alpha: 0.6)
+                            : Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: isProtege ? AppTheme.primary : Colors.grey.shade300,
+                          width: isProtege ? 2 : 1,
+                        ),
+                      ),
+                      child: Column(
+                        children: [
+                          Icon(
+                            Icons.shield_rounded,
+                            color: isProtege ? AppTheme.primary : Colors.grey,
+                            size: 28,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Protégé',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                              color: isProtege ? AppTheme.primary : AppTheme.textDark,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Préservatif / barrière',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: isProtege ? AppTheme.primary : AppTheme.textMuted,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 20),
+
+            // Heure du rapport (optionnel)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.access_time_rounded, color: AppTheme.textMuted, size: 20),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Heure du rapport (optionnel)',
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textDark),
+                        ),
+                        Text(
+                          _heureRapport != null && _heureRapport!.isNotEmpty
+                              ? _heureRapport!
+                              : 'Non précisée',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: _heureRapport != null && _heureRapport!.isNotEmpty
+                                ? AppTheme.primary
+                                : AppTheme.textMuted,
+                            fontWeight: _heureRapport != null ? FontWeight.bold : FontWeight.normal,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (_heureRapport != null && _heureRapport!.isNotEmpty)
+                    IconButton(
+                      icon: const Icon(Icons.clear_rounded, size: 18, color: AppTheme.textMuted),
+                      onPressed: () => setState(() => _heureRapport = null),
+                      tooltip: 'Effacer l’heure',
+                    ),
+                  TextButton(
+                    onPressed: () async {
+                      TimeOfDay initial = const TimeOfDay(hour: 22, minute: 0);
+                      if (_heureRapport != null && _heureRapport!.contains(':')) {
+                        final parts = _heureRapport!.split(':');
+                        initial = TimeOfDay(
+                          hour: int.tryParse(parts[0]) ?? 22,
+                          minute: int.tryParse(parts[1]) ?? 0,
+                        );
+                      }
+                      final picked = await showTimePicker(
+                        context: context,
+                        initialTime: initial,
+                      );
+                      if (picked != null) {
+                        setState(() {
+                          _heureRapport =
+                              '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
+                        });
+                      }
+                    },
+                    child: Text(
+                      _heureRapport != null ? 'Modifier' : 'Définir',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // Contraception d'urgence
+            Container(
+              decoration: BoxDecoration(
+                color: _contraceptionUrgence ? Colors.amber.shade50 : Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: _contraceptionUrgence ? Colors.amber.shade400 : Colors.grey.shade200,
+                ),
+              ),
+              child: Column(
+                children: [
+                  SwitchListTile(
+                    title: const Text(
+                      'Contraception d’urgence prise',
+                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                    ),
+                    subtitle: const Text(
+                      'Pilule du lendemain ou DIU posé en urgence',
+                      style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                    ),
+                    value: _contraceptionUrgence,
+                    activeThumbColor: Colors.amber.shade800,
+                    activeTrackColor: Colors.amber.shade200,
+                    onChanged: (val) => setState(() => _contraceptionUrgence = val),
+                  ),
+                  if (_contraceptionUrgence)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                      child: Row(
+                        children: [
+                          Icon(Icons.info_outline_rounded, color: Colors.amber.shade900, size: 16),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Peut temporairement altérer la régularité du cycle et le plateau thermique.',
+                              style: TextStyle(fontSize: 11, color: Colors.amber.shade900),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            // Notes privées chiffrées
+            TextField(
+              controller: _notesIntercourseController,
+              maxLines: 3,
+              decoration: InputDecoration(
+                labelText: 'Notes intimes privées',
+                hintText: 'Ressenti, confort, détails particuliers...',
+                prefixIcon: const Icon(Icons.lock_outline_rounded, color: Colors.teal),
+                helperText: '🔒 Chiffré de bout en bout avec AES-256',
+                helperStyle: TextStyle(color: Colors.teal.shade700, fontSize: 11),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: const BorderSide(color: Colors.teal, width: 2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+          ],
+        ],
+      ),
     );
   }
 }

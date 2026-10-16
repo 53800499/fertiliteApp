@@ -3,7 +3,7 @@ import '../theme/app_theme.dart';
 
 /// Conteneur d'arrière-plan immersif, ergonomique et apaisant.
 /// Il superpose une image de fond naturelle/éditoriale avec un double dégradé protecteur
-/// respectant la palette FEMAX (AppTheme.background, primaryLight, accentRoseLight).
+/// respectant la palette FertiliteApp (AppTheme.background, primaryLight, accentRoseLight).
 /// Cela garantit un contraste parfait (WCAG AAA) et une lisibilité absolue des textes et cartes.
 class AtmosphericBackground extends StatelessWidget {
   final Widget child;

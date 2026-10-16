@@ -81,7 +81,7 @@ class MedicalSummaryBottomSheet extends StatelessWidget {
   String _generateClinicalText(List<CycleModel> completedCycles, double avgPain) {
     final now = DateTime.now();
     final buffer = StringBuffer();
-    buffer.writeln('📋 BILAN MÉDICAL DU CYCLE MENSTRUEL (Relevé FEMAX)');
+    buffer.writeln('📋 BILAN MÉDICAL DU CYCLE MENSTRUEL (Relevé FertiliteApp)');
     buffer.writeln('Date de génération : ${_formatDate(now)}');
     if (userProfile?.profil.prenom != null && userProfile!.profil.prenom!.isNotEmpty) {
       buffer.writeln('Patiente : ${userProfile!.profil.prenom}');

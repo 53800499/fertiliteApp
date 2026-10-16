@@ -17,15 +17,19 @@ import '../../features/cycles/data/repositories/cycle_repository_impl.dart';
 import '../../features/cycles/domain/repositories/cycle_repository.dart';
 import '../../features/cycles/presentation/bloc/cycle_bloc.dart';
 import '../../features/observations/data/datasources/observation_remote_data_source.dart';
+import '../../features/observations/data/datasources/observation_sync_manager.dart';
 import '../../features/observations/data/repositories/observation_repository_impl.dart';
 import '../../features/observations/domain/repositories/observation_repository.dart';
 import '../../features/observations/presentation/bloc/observation_bloc.dart';
+import '../../features/observations/presentation/bloc/observation_event.dart';
 import '../../features/fertility/data/datasources/fertility_remote_data_source.dart';
 import '../../features/fertility/data/repositories/fertility_repository_impl.dart';
 import '../../features/fertility/domain/repositories/fertility_repository.dart';
 import '../../features/auth/presentation/bloc/auth_state.dart';
 import '../../features/auth/data/models/auth_models.dart';
 import '../../features/fertility/presentation/bloc/fertility_bloc.dart';
+import '../../features/notifications/data/datasources/notification_remote_data_source.dart';
+import '../../features/notifications/presentation/bloc/notification_bloc.dart';
 
 class ServiceLocator {
   static late final SecureStorageHelper storage;
@@ -50,8 +54,9 @@ class ServiceLocator {
   static late final ICycleRepository cycleRepository;
   static late final CycleBloc cycleBloc;
 
-  // Observations (Module 3)
+  // Observations (Module 3 avec file d'attente hors-ligne)
   static late final IObservationRemoteDataSource observationRemoteDataSource;
+  static late final ObservationSyncManager observationSyncManager;
   static late final IObservationRepository observationRepository;
   static late final ObservationBloc observationBloc;
 
@@ -59,6 +64,10 @@ class ServiceLocator {
   static late final IFertilityRemoteDataSource fertilityRemoteDataSource;
   static late final IFertilityRepository fertilityRepository;
   static late final FertilityBloc fertilityBloc;
+
+  // Notifications (Module 6 - UC-20, UC-21, UC-22)
+  static late final INotificationRemoteDataSource notificationRemoteDataSource;
+  static late final NotificationBloc notificationBloc;
 
   static Future<void> init({String? baseUrl, void Function()? onSessionExpired}) async {
     storage = SecureStorageHelper();
@@ -137,14 +146,23 @@ class ServiceLocator {
     );
     cycleBloc = CycleBloc(cycleRepository: cycleRepository);
 
-    // Observations (Module 3)
+    // Observations (Module 3 avec file d'attente hors-ligne & synchronisation bidirectionnelle)
     observationRemoteDataSource = ObservationRemoteDataSourceImpl(
       dio: apiClient.dio,
     );
+    observationSyncManager = ObservationSyncManager(storage: storage);
     observationRepository = ObservationRepositoryImpl(
       remoteDataSource: observationRemoteDataSource,
+      syncManager: observationSyncManager,
     );
     observationBloc = ObservationBloc(observationRepository: observationRepository);
+
+    // Synchronisation automatique des observations lors du retour en ligne (Option C)
+    networkCubit.stream.listen((netState) {
+      if (netState.isOnline) {
+        observationBloc.add(const SyncPendingObservationsEvent(isAutomatic: true));
+      }
+    });
 
     // Fertility (Module 4)
     fertilityRemoteDataSource = FertilityRemoteDataSourceImpl(
@@ -154,5 +172,13 @@ class ServiceLocator {
       remoteDataSource: fertilityRemoteDataSource,
     );
     fertilityBloc = FertilityBloc(fertilityRepository: fertilityRepository);
+
+    // Notifications (Module 6 - UC-20, UC-21, UC-22)
+    notificationRemoteDataSource = NotificationRemoteDataSourceImpl(
+      dio: apiClient.dio,
+    );
+    notificationBloc = NotificationBloc(
+      remoteDataSource: notificationRemoteDataSource,
+    );
   }
 }

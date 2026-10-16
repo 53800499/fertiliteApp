@@ -12,7 +12,7 @@ enum FeedbackType {
 }
 
 /// Système professionnel, moderne et bienveillant de notifications et d'alertes
-/// Respecte l'identité visuelle FEMAX (AppTheme) et propose des retours haptiques subtils.
+/// Respecte l'identité visuelle FertiliteApp (AppTheme) et propose des retours haptiques subtils.
 class AppFeedback {
   AppFeedback._();
 

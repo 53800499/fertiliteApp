@@ -7,6 +7,10 @@ import 'features/auth/presentation/bloc/auth_state.dart';
 import 'features/auth/presentation/screens/onboarding_screen.dart';
 import 'features/navigation/main_navigation_screen.dart';
 
+import 'features/cycles/presentation/bloc/cycle_bloc.dart';
+import 'features/observations/presentation/bloc/observation_bloc.dart';
+import 'features/fertility/presentation/bloc/fertility_bloc.dart';
+import 'features/notifications/presentation/bloc/notification_bloc.dart';
 import 'core/network/network_cubit.dart';
 
 void main() async {
@@ -27,6 +31,10 @@ class FertiliteApp extends StatelessWidget {
     return MultiBlocProvider(
       providers: [
         BlocProvider<AuthBloc>.value(value: ServiceLocator.authBloc),
+        BlocProvider<CycleBloc>.value(value: ServiceLocator.cycleBloc),
+        BlocProvider<ObservationBloc>.value(value: ServiceLocator.observationBloc),
+        BlocProvider<FertilityBloc>.value(value: ServiceLocator.fertilityBloc),
+        BlocProvider<NotificationBloc>.value(value: ServiceLocator.notificationBloc),
         BlocProvider<NetworkCubit>.value(value: ServiceLocator.networkCubit),
       ],
       child: MaterialApp(
@@ -51,7 +59,7 @@ class AuthWrapper extends StatelessWidget {
         } else if (state is UnauthenticatedState || state is AuthFailureState) {
           return const OnboardingScreen();
         }
-        // Écran de transition soigné aux couleurs FEMAX
+        // Écran de transition soigné aux couleurs FertiliteApp
         return Scaffold(
           backgroundColor: AppTheme.background,
           body: Center(
@@ -75,7 +83,7 @@ class AuthWrapper extends StatelessWidget {
                 ),
                 const SizedBox(height: 18),
                 const Text(
-                  'FEMAX',
+                  'FertiliteApp',
                   style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,

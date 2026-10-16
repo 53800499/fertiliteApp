@@ -795,7 +795,8 @@ class _CycleDetailBottomSheetState extends State<CycleDetailBottomSheet> {
           _buildPhaseRow(
             label: 'Fenêtre fertile & Ovulation',
             subtitle: 'Pic de LH & réceptivité maximale',
-            dayRange: 'J$fertStart à J$fertEnd (Pic J$safeOv)',
+            dayRange: 'J$fertStart à J$fertEnd',
+            dayDetail: 'Pic J$safeOv',
             color: AppTheme.accentRose,
             icon: Icons.favorite_rounded,
             isActive: isEnCours && currentDay >= fertStart && currentDay <= fertEnd,
@@ -820,6 +821,7 @@ class _CycleDetailBottomSheetState extends State<CycleDetailBottomSheet> {
     required String label,
     required String subtitle,
     required String dayRange,
+    String? dayDetail,
     required Color color,
     required IconData icon,
     required bool isActive,
@@ -835,6 +837,7 @@ class _CycleDetailBottomSheetState extends State<CycleDetailBottomSheet> {
         ),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Container(
             padding: const EdgeInsets.all(6),
@@ -849,7 +852,10 @@ class _CycleDetailBottomSheetState extends State<CycleDetailBottomSheet> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
+                Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 6,
+                  runSpacing: 2,
                   children: [
                     Text(
                       label,
@@ -859,8 +865,7 @@ class _CycleDetailBottomSheetState extends State<CycleDetailBottomSheet> {
                         color: isActive ? color : AppTheme.textDark,
                       ),
                     ),
-                    if (isActive) ...[
-                      const SizedBox(width: 6),
+                    if (isActive)
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                         decoration: BoxDecoration(
@@ -872,23 +877,43 @@ class _CycleDetailBottomSheetState extends State<CycleDetailBottomSheet> {
                           style: TextStyle(fontSize: 8.5, color: Colors.white, fontWeight: FontWeight.bold),
                         ),
                       ),
-                    ],
                   ],
                 ),
+                const SizedBox(height: 1),
                 Text(
                   subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontSize: 10.5, color: AppTheme.textMuted),
                 ),
               ],
             ),
           ),
-          Text(
-            dayRange,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: isActive ? color : AppTheme.textMuted,
-            ),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                dayRange,
+                textAlign: TextAlign.end,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: isActive ? color : AppTheme.textMuted,
+                ),
+              ),
+              if (dayDetail != null)
+                Text(
+                  dayDetail,
+                  textAlign: TextAlign.end,
+                  style: TextStyle(
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w600,
+                    color: isActive ? color : AppTheme.textMuted,
+                  ),
+                ),
+            ],
           ),
         ],
       ),

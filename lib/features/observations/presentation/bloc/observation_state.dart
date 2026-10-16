@@ -56,3 +56,38 @@ class ObservationFailureState extends ObservationState {
   @override
   List<Object?> get props => [message];
 }
+
+/// État chargé pour la courbe de température basale (BBT)
+class BbtAnalysisLoadedState extends ObservationState {
+  final BbtAnalysisModel analysis;
+  final bool isRefreshing;
+
+  const BbtAnalysisLoadedState({
+    required this.analysis,
+    this.isRefreshing = false,
+  });
+
+  @override
+  List<Object?> get props => [analysis, isRefreshing];
+}
+
+/// État de synchronisation hors-ligne en cours (Option C)
+class ObservationsSyncInProgressState extends ObservationState {
+  final int pendingCount;
+
+  const ObservationsSyncInProgressState({required this.pendingCount});
+
+  @override
+  List<Object?> get props => [pendingCount];
+}
+
+/// État de succès de synchronisation (Option C)
+class ObservationsSyncSuccessState extends ObservationState {
+  final ObservationSyncReport report;
+
+  const ObservationsSyncSuccessState({required this.report});
+
+  @override
+  List<Object?> get props => [report];
+}
+

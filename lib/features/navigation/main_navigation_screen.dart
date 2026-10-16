@@ -9,6 +9,8 @@ import '../cycles/presentation/bloc/cycle_bloc.dart';
 import '../cycles/presentation/bloc/cycle_event.dart';
 import '../observations/presentation/bloc/observation_bloc.dart';
 import '../fertility/presentation/bloc/fertility_bloc.dart';
+import '../notifications/presentation/bloc/notification_bloc.dart';
+import '../notifications/presentation/bloc/notification_event.dart';
 import '../cycles/presentation/screens/calendar_screen.dart';
 import '../cycles/presentation/screens/cycle_history_screen.dart';
 import '../cycles/presentation/screens/cycle_stats_screen.dart';
@@ -33,6 +35,14 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     ProfileScreen(),
   ];
 
+  @override
+  void initState() {
+    super.initState();
+    // Chargement initial silencieux des notifications & évaluation des rappels
+    ServiceLocator.notificationBloc.add(const LoadNotificationsEvent(silent: true));
+    ServiceLocator.notificationBloc.add(EvaluateRemindersEvent());
+  }
+
   void _onTabTapped(int index) {
     setState(() {
       _currentIndex = index;
@@ -47,6 +57,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         BlocProvider<CycleBloc>.value(value: ServiceLocator.cycleBloc),
         BlocProvider<ObservationBloc>.value(value: ServiceLocator.observationBloc),
         BlocProvider<FertilityBloc>.value(value: ServiceLocator.fertilityBloc),
+        BlocProvider<NotificationBloc>.value(value: ServiceLocator.notificationBloc),
         BlocProvider<NetworkCubit>.value(value: ServiceLocator.networkCubit),
       ],
       child: BlocListener<NetworkCubit, NetworkState>(

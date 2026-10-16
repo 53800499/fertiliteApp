@@ -8,6 +8,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../auth/presentation/bloc/auth_event.dart';
 import '../../../privacy/presentation/screens/privacy_settings_screen.dart';
+import '../../../notifications/presentation/screens/notification_preferences_screen.dart';
 import '../../data/models/user_profile_model.dart';
 import 'profile_setup_screen.dart';
 import '../../../../core/network/network_cubit.dart';
@@ -330,6 +331,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             MaterialPageRoute(builder: (_) => const PrivacySettingsScreen()),
                           );
                           _loadProfile();
+                        },
+                      ),
+                      const SizedBox(height: 10),
+
+                      _buildActionCard(
+                        icon: Icons.notifications_active_rounded,
+                        title: 'Rappels & Notifications',
+                        subtitle: 'Heure des rappels quotidiens, alertes fertilité & règles',
+                        color: AppTheme.accentRose,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const NotificationPreferencesScreen(),
+                            ),
+                          );
                         },
                       ),
                       const SizedBox(height: 10),

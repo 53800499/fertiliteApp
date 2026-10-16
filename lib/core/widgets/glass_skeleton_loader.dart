@@ -469,3 +469,187 @@ class _HistorySkeletonViewState extends State<HistorySkeletonView>
   }
 }
 
+/// Squelette dédié à la page Confidentialité, RGPD & Sécurité
+class PrivacySkeletonView extends StatefulWidget {
+  const PrivacySkeletonView({super.key});
+
+  @override
+  State<PrivacySkeletonView> createState() => _PrivacySkeletonViewState();
+}
+
+class _PrivacySkeletonViewState extends State<PrivacySkeletonView>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1300),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        final opacity = 0.35 + (_controller.value * 0.45);
+
+        return ListView(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          physics: const NeverScrollableScrollPhysics(),
+          children: [
+            // 1. Bandeau RGPD
+            GlassCard(
+              padding: const EdgeInsets.all(16),
+              borderRadius: 20,
+              child: Row(
+                children: [
+                  ShimmerBone(width: 46, height: 46, borderRadius: 23, opacity: opacity),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ShimmerBone(width: 180, height: 16, opacity: opacity),
+                        const SizedBox(height: 8),
+                        ShimmerBone(height: 12, opacity: opacity * 0.7),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // 2. Section Paramètres de protection (4 interrupteurs)
+            GlassCard(
+              padding: const EdgeInsets.all(18),
+              borderRadius: 20,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      ShimmerBone(width: 22, height: 22, borderRadius: 6, opacity: opacity),
+                      const SizedBox(width: 10),
+                      ShimmerBone(width: 160, height: 16, opacity: opacity),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  for (int i = 0; i < 4; i++) ...[
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              ShimmerBone(width: 190, height: 14, opacity: opacity),
+                              const SizedBox(height: 6),
+                              ShimmerBone(width: 230, height: 11, opacity: opacity * 0.7),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        ShimmerBone(width: 44, height: 26, borderRadius: 14, opacity: opacity),
+                      ],
+                    ),
+                    if (i < 3) const SizedBox(height: 16),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 18),
+
+            // 3. Section Consentements
+            GlassCard(
+              padding: const EdgeInsets.all(18),
+              borderRadius: 20,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      ShimmerBone(width: 22, height: 22, borderRadius: 6, opacity: opacity),
+                      const SizedBox(width: 10),
+                      ShimmerBone(width: 170, height: 16, opacity: opacity),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  for (int i = 0; i < 2; i++) ...[
+                    Row(
+                      children: [
+                        ShimmerBone(width: 18, height: 18, borderRadius: 9, opacity: opacity),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              ShimmerBone(width: 150, height: 13, opacity: opacity),
+                              const SizedBox(height: 5),
+                              ShimmerBone(width: 110, height: 10, opacity: opacity * 0.7),
+                            ],
+                          ),
+                        ),
+                        ShimmerBone(width: 55, height: 20, borderRadius: 6, opacity: opacity),
+                      ],
+                    ),
+                    if (i < 1) const SizedBox(height: 14),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 18),
+
+            // 4. Section Sessions Actives
+            GlassCard(
+              padding: const EdgeInsets.all(18),
+              borderRadius: 20,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      ShimmerBone(width: 22, height: 22, borderRadius: 6, opacity: opacity),
+                      const SizedBox(width: 10),
+                      ShimmerBone(width: 180, height: 16, opacity: opacity),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      ShimmerBone(width: 22, height: 22, borderRadius: 6, opacity: opacity),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            ShimmerBone(width: 130, height: 13, opacity: opacity),
+                            const SizedBox(height: 5),
+                            ShimmerBone(width: 90, height: 10, opacity: opacity * 0.7),
+                          ],
+                        ),
+                      ),
+                      ShimmerBone(width: 75, height: 24, borderRadius: 8, opacity: opacity * 0.8),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+

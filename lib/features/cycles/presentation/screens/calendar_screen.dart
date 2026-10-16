@@ -27,6 +27,9 @@ import '../../../../core/widgets/atmospheric_background.dart';
 import '../../../../core/widgets/glass_card.dart';
 import '../../../../core/widgets/glass_skeleton_loader.dart';
 import '../../../../core/error/error_feedback.dart';
+import '../../../notifications/presentation/bloc/notification_bloc.dart';
+import '../../../notifications/presentation/bloc/notification_state.dart';
+import '../../../notifications/presentation/screens/notification_inbox_screen.dart';
 
 class CalendarScreen extends StatefulWidget {
   const CalendarScreen({super.key});
@@ -113,6 +116,67 @@ class _CalendarScreenState extends State<CalendarScreen> {
         subtitle: "Aujourd'hui",
         title: 'Calendrier & Fertilité',
         onRefresh: _handleRefresh,
+        actions: [
+          BlocBuilder<NotificationBloc, NotificationState>(
+            builder: (context, notifState) {
+              final unreadCount = notifState is NotificationLoadedState
+                  ? notifState.unreadCount
+                  : 0;
+
+              return Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  IconButton(
+                    icon: const Icon(
+                      Icons.notifications_outlined,
+                      color: AppTheme.textDark,
+                      size: 24,
+                    ),
+                    tooltip: 'Notifications & Alertes',
+                    onPressed: () {
+                      HapticFeedback.lightImpact();
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const NotificationInboxScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  if (unreadCount > 0)
+                    Positioned(
+                      top: 6,
+                      right: 6,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 5,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primary,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.white, width: 1.5),
+                        ),
+                        constraints: const BoxConstraints(
+                          minWidth: 16,
+                          minHeight: 16,
+                        ),
+                        child: Text(
+                          unreadCount > 9 ? '9+' : '$unreadCount',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+        ],
       ),
       body: AtmosphericBackground(
         imagePath: 'assets/images/woman_wellness_natural.jpg',
@@ -718,7 +782,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
     String imagePath = 'assets/images/woman_wellness_natural.jpg';
     String title = "Écoute du corps & Sérénité";
-    String message = "Chaque cycle est unique. Vos paramètres FEMAX adaptent vos repères jour après jour.";
+    String message = "Chaque cycle est unique. Vos paramètres FertiliteApp adaptent vos repères jour après jour.";
     String badge = "Bien-être au naturel";
 
     if (effectiveDay >= 1 && effectiveDay <= dureeRegles) {
@@ -1003,6 +1067,13 @@ class _CalendarScreenState extends State<CalendarScreen> {
                           right: 2,
                           child: Icon(Icons.star_rounded, size: 8, color: AppTheme.accentRose),
                         ),
+                      if (!isSelected &&
+                          context.read<ObservationBloc>().cachedDays[cellDateStr]?.rapport != null)
+                        const Positioned(
+                          top: 2,
+                          left: 2,
+                          child: Icon(Icons.favorite_rounded, size: 7, color: Color(0xFFE91E63)),
+                        ),
                     ],
                   ),
                 ),
@@ -1181,8 +1252,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
                           const SizedBox(height: 2),
                           Text(
                             (dayObs != null && dayObs.hasObservations)
-                                ? 'Modifier la température, glaire, test LH ou symptômes'
-                                : 'Température basale, texture de glaire, test LH, ressentis',
+                                ? 'Modifier : T°, glaire, test LH, rapports ou symptômes'
+                                : 'Température basale, glaire, test LH, intimité (chiffrée), ressentis',
                             style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
                           ),
                         ],
@@ -1212,7 +1283,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 1. Diagnostic & Réaction adaptative de FEMAX pour la date sélectionnée
+          // 1. Diagnostic & Réaction adaptative de FertiliteApp pour la date sélectionnée
           _buildDayObjectiveInsightBanner(cycle, hasFlow && jour.intensiteFlux != 'absent'),
           const SizedBox(height: 14),
 
@@ -1220,52 +1291,61 @@ class _CalendarScreenState extends State<CalendarScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: (hasFlow && jour.intensiteFlux != 'absent')
-                          ? AppTheme.periodColor.withValues(alpha: 0.12)
-                          : AppTheme.primaryLight,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Icons.water_drop_rounded,
-                      color: (hasFlow && jour.intensiteFlux != 'absent')
-                          ? AppTheme.periodColor
-                          : AppTheme.primary,
-                      size: 18,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Flux menstruel',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
-                          color: AppTheme.textDark,
-                        ),
+              Expanded(
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: (hasFlow && jour.intensiteFlux != 'absent')
+                            ? AppTheme.periodColor.withValues(alpha: 0.12)
+                            : AppTheme.primaryLight,
+                        shape: BoxShape.circle,
                       ),
-                      Text(
-                        '${_selectedDate.day}/${_selectedDate.month}/${_selectedDate.year}',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppTheme.textMuted,
-                          fontWeight: FontWeight.w500,
-                        ),
+                      child: Icon(
+                        Icons.water_drop_rounded,
+                        color: (hasFlow && jour.intensiteFlux != 'absent')
+                            ? AppTheme.periodColor
+                            : AppTheme.primary,
+                        size: 18,
                       ),
-                    ],
-                  ),
-                ],
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Flux menstruel',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                              color: AppTheme.textDark,
+                            ),
+                          ),
+                          Text(
+                            '${_selectedDate.day}/${_selectedDate.month}/${_selectedDate.year}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppTheme.textMuted,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
               TextButton.icon(
                 style: TextButton.styleFrom(
                   backgroundColor: AppTheme.periodColor.withValues(alpha: 0.08),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 onPressed: () async {
@@ -1310,11 +1390,13 @@ class _CalendarScreenState extends State<CalendarScreen> {
                     color: _getIntensityColor(jour.intensiteFlux),
                   ),
                   const SizedBox(width: 10),
-                  const Text(
-                    'Intensité du flux',
-                    style: TextStyle(fontSize: 13, color: AppTheme.textMuted),
+                  const Expanded(
+                    child: Text(
+                      'Intensité du flux',
+                      style: TextStyle(fontSize: 13, color: AppTheme.textMuted),
+                    ),
                   ),
-                  const Spacer(),
+                  const SizedBox(width: 8),
                   if (_getIntensityDrops(jour.intensiteFlux) > 0) ...[
                     Row(
                       mainAxisSize: MainAxisSize.min,
@@ -1355,11 +1437,13 @@ class _CalendarScreenState extends State<CalendarScreen> {
                       color: _getPainColor(jour.douleurNiveau!),
                     ),
                     const SizedBox(width: 10),
-                    const Text(
-                      'Crampes & douleur',
-                      style: TextStyle(fontSize: 11, color: AppTheme.textMuted),
+                    const Expanded(
+                      child: Text(
+                        'Crampes & douleur',
+                        style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                      ),
                     ),
-                    const Spacer(),
+                    const SizedBox(width: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(
@@ -1582,7 +1666,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
       case 'planifier_grossesse':
       case 'concevoir':
         if (isOvulation) {
-          badge = 'PIC DE FERTILITÉ • OVULATION';
+          badge = 'PIC DE FERTILITÉ';
           badgeColor = AppTheme.accentRose;
           badgeIcon = Icons.star_rounded;
           title = 'Jour optimal pour concevoir';
@@ -1590,7 +1674,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
           actionLabel = '🌸 Cible prioritaire • Glaire blanc d\'œuf ou test LH +';
           actionIcon = Icons.favorite_rounded;
         } else if (isFertile) {
-          badge = 'FENÊTRE FERTILE • TRÈS FAVORABLE';
+          badge = 'FENÊTRE FERTILE FAVORABLE';
           badgeColor = const Color(0xFFE91E63);
           badgeIcon = Icons.auto_awesome_rounded;
           title = 'Chances de fécondation élevées';
@@ -1598,7 +1682,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
           actionLabel = '✨ Rapports recommandés tous les 1 à 2 jours';
           actionIcon = Icons.favorite_border_rounded;
         } else if (isFlowDay || (dayInCycle != null && dayInCycle <= periodDuration && dayInCycle > 0)) {
-          badge = 'DÉBUT DE CYCLE • PHASE MENSTRUELLE';
+          badge = 'DÉBUT DE CYCLE • RÈGLES';
           badgeColor = AppTheme.periodColor;
           badgeIcon = Icons.water_drop_rounded;
           title = 'Régénération & Préparation du corps';
@@ -1614,7 +1698,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
           actionLabel = '🌿 Sérénité d\'esprit & rythme calme';
           actionIcon = Icons.self_improvement_rounded;
         } else {
-          badge = 'PHASE FOLLICULAIRE • ESSOR';
+          badge = 'PHASE FOLLICULAIRE';
           badgeColor = AppTheme.primary;
           badgeIcon = Icons.bolt_rounded;
           title = 'Maturation folliculaire';
@@ -1635,7 +1719,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
           actionLabel = '🛡️ Préservatif ou abstinence obligatoire';
           actionIcon = Icons.shield_rounded;
         } else if (isFlowDay || (dayInCycle != null && dayInCycle <= periodDuration && dayInCycle > 0)) {
-          badge = 'RÈGLES • INFERTILITÉ PHYSIOLOGIQUE';
+          badge = 'RÈGLES • INFERTILITÉ';
           badgeColor = AppTheme.periodColor;
           badgeIcon = Icons.water_drop_rounded;
           title = 'Probabilité de conception très faible';
@@ -1643,7 +1727,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
           actionLabel = '🛡️ Période de faible risque';
           actionIcon = Icons.verified_user_rounded;
         } else if (dayInCycle != null && dayInCycle > theoreticalOvulation + 2) {
-          badge = 'ZONE SÉCURISÉE • INFERTILITÉ VALIDÉE';
+          badge = 'ZONE SÉCURISÉE • INFERTILE';
           badgeColor = Colors.teal.shade700;
           badgeIcon = Icons.verified_rounded;
           title = 'Infertilité post-ovulatoire';
@@ -1651,7 +1735,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
           actionLabel = '✅ Période sécurisée pour les rapports';
           actionIcon = Icons.check_circle_outline_rounded;
         } else {
-          badge = 'SURVEILLANCE PRÉ-OVULATOIRE';
+          badge = 'PRÉ-OVULATION • VIGILANCE';
           badgeColor = Colors.amber.shade900;
           badgeIcon = Icons.search_rounded;
           title = 'Surveillance quotidienne de la glaire';
@@ -1663,7 +1747,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
       case 'comprendre_corps':
         if (isFlowDay || (dayInCycle != null && dayInCycle <= periodDuration && dayInCycle > 0)) {
-          badge = 'HIVER HORMONAL • MENSTRUATION';
+          badge = 'HIVER • MENSTRUATION';
           badgeColor = AppTheme.periodColor;
           badgeIcon = Icons.spa_rounded;
           title = 'Reset complet & Introspection';
@@ -1671,7 +1755,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
           actionLabel = '🌙 Ralentissez & écoutez votre fatigue';
           actionIcon = Icons.nightlight_round;
         } else if (isOvulation || isFertile) {
-          badge = 'ÉTÉ HORMONAL • OVULATION';
+          badge = 'ÉTÉ • OVULATION';
           badgeColor = AppTheme.accentRose;
           badgeIcon = Icons.auto_awesome_rounded;
           title = 'Pic d\'Œstrogènes & de Testostérone';
@@ -1679,7 +1763,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
           actionLabel = '🌸 Énergie rayonnante & communication';
           actionIcon = Icons.favorite_rounded;
         } else if (dayInCycle != null && dayInCycle > theoreticalOvulation + 1) {
-          badge = 'AUTOMNE HORMONAL • LUTÉALE';
+          badge = 'AUTOMNE • PHASE LUTÉALE';
           badgeColor = Colors.purple.shade700;
           badgeIcon = Icons.psychology_rounded;
           title = 'Climat de Progestérone dominante';
@@ -1687,7 +1771,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
           actionLabel = '🍫 Douceur, magnésium & écoute de soi';
           actionIcon = Icons.self_improvement_rounded;
         } else {
-          badge = 'PRINTEMPS HORMONAL • FOLLICULAIRE';
+          badge = 'PRINTEMPS • FOLLICULAIRE';
           badgeColor = Colors.teal.shade700;
           badgeIcon = Icons.bolt_rounded;
           title = 'Montée progressive des Œstrogènes';
@@ -1705,12 +1789,12 @@ class _CalendarScreenState extends State<CalendarScreen> {
           badgeColor = AppTheme.periodColor;
           badgeIcon = Icons.water_drop_rounded;
           title = 'Journée de flux menstruel';
-          message = 'Consignez votre flux et vos crampes pour que FEMAX ajuste la durée réelle de vos règles et vos repères futurs.';
+          message = 'Consignez votre flux et vos crampes pour que FertiliteApp ajuste la durée réelle de vos règles et vos repères futurs.';
           actionLabel = '💧 Enregistrez vos flux & douleurs';
           actionIcon = Icons.edit_note_rounded;
         } else if (dayInCycle != null && dayInCycle >= cycleDuration - 4 && dayInCycle <= cycleDuration) {
           final diff = cycleDuration - dayInCycle;
-          badge = 'ARRIVÉE PROCHAINE DES RÈGLES';
+          badge = 'RÈGLES IMMINENTES';
           badgeColor = Colors.amber.shade900;
           badgeIcon = Icons.access_time_rounded;
           title = 'Phase prémenstruelle (SPM)';
@@ -1721,7 +1805,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
           actionIcon = Icons.calendar_today_rounded;
         } else if (dayInCycle != null && dayInCycle > cycleDuration) {
           final retard = dayInCycle - cycleDuration;
-          badge = 'RETARD DE RÈGLES ($retard j)';
+          badge = 'RETARD ($retard j)';
           badgeColor = Colors.deepOrange.shade800;
           badgeIcon = Icons.warning_amber_rounded;
           title = 'Cycle plus long qu\'habituellement';
@@ -1760,32 +1844,42 @@ class _CalendarScreenState extends State<CalendarScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: badgeColor.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(badgeIcon, size: 12, color: badgeColor),
-                    const SizedBox(width: 5),
-                    Text(
-                      badge,
-                      style: TextStyle(
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w800,
-                        color: badgeColor,
-                        letterSpacing: 0.2,
-                      ),
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: badgeColor.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                  ],
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(badgeIcon, size: 12, color: badgeColor),
+                        const SizedBox(width: 5),
+                        Flexible(
+                          child: Text(
+                            badge,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w800,
+                              color: badgeColor,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
-              const Spacer(),
-              if (dayInCycle != null && dayInCycle > 0)
+              if (dayInCycle != null && dayInCycle > 0) ...[
+                const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                   decoration: BoxDecoration(
@@ -1802,6 +1896,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                     ),
                   ),
                 ),
+              ],
             ],
           ),
           const SizedBox(height: 8),
@@ -1861,9 +1956,17 @@ class _CalendarScreenState extends State<CalendarScreen> {
         children: [
           Icon(icon, size: 18, color: color),
           const SizedBox(width: 10),
-          Text(label, style: const TextStyle(fontSize: 12.5, color: AppTheme.textMuted)),
-          const Spacer(),
-          Text(value, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: color)),
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 12.5, color: AppTheme.textMuted),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            value,
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: color),
+          ),
         ],
       ),
     );

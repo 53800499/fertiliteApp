@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../data/models/observation_models.dart';
+import '../bloc/observation_bloc.dart';
+import '../bloc/observation_event.dart';
 import 'observation_entry_bottom_sheet.dart';
 
 class DayObservationsCard extends StatelessWidget {
@@ -88,6 +91,51 @@ class DayObservationsCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
+          if (obs != null && obs.isPendingSync) ...[
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              decoration: BoxDecoration(
+                color: Colors.amber.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.amber.shade300.withValues(alpha: 0.7)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.cloud_queue_rounded, size: 16, color: Colors.amber.shade800),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Enregistré hors ligne (en attente de synchronisation)',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.amber.shade900,
+                      ),
+                    ),
+                  ),
+                  InkWell(
+                    onTap: () {
+                      context.read<ObservationBloc>().add(const SyncPendingObservationsEvent());
+                    },
+                    borderRadius: BorderRadius.circular(6),
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      child: Text(
+                        'Synchroniser',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.primary,
+                          decoration: TextDecoration.underline,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           if (!hasData) ...[
             Text(
               'Ajoutez votre température, texture de glaire, test LH ou ressentis pour affiner vos prédictions.',
@@ -122,6 +170,18 @@ class DayObservationsCard extends StatelessWidget {
                     icon: Icons.science_outlined,
                     label: 'LH: ${obs.testsLh.first.label}',
                     color: obs.testsLh.first.isPeak ? Colors.purple : Colors.blue,
+                  ),
+
+                // Rapport intime (UC-24 avec chiffrement AES-256)
+                if (obs.rapport != null)
+                  _buildPill(
+                    icon: Icons.favorite_rounded,
+                    label: obs.rapport!.typeRapport == TypeRapport.protege
+                        ? 'Rapport protégé'
+                        : 'Rapport intime',
+                    color: const Color(0xFFE91E63),
+                    badge: obs.rapport!.typeRapport == TypeRapport.nonProtege ? 'Conception' : null,
+                    subtitle: obs.rapport!.contraceptionUrgence ? 'Urgence' : null,
                   ),
               ],
             ),

@@ -20,6 +20,12 @@ import '../../../../core/widgets/glass_skeleton_loader.dart';
 import '../../../../core/error/error_feedback.dart';
 import '../widgets/cycle_detail_bottom_sheet.dart';
 import '../widgets/medical_summary_bottom_sheet.dart';
+import '../../../observations/presentation/bloc/observation_bloc.dart';
+import '../../../observations/presentation/bloc/observation_event.dart';
+import '../../../observations/presentation/bloc/observation_state.dart';
+import '../../../observations/presentation/widgets/bbt_chart_widget.dart';
+import '../../../observations/presentation/widgets/observation_entry_bottom_sheet.dart';
+import '../../../observations/data/models/observation_models.dart';
 
 class CycleStatsScreen extends StatefulWidget {
   const CycleStatsScreen({super.key});
@@ -85,7 +91,28 @@ class _CycleStatsScreenState extends State<CycleStatsScreen> {
     super.initState();
     context.read<CycleBloc>().add(LoadCycleStatsEvent());
     context.read<CycleBloc>().add(LoadCyclesEvent());
+    _loadBbtAnalysis();
     _loadProfile();
+  }
+
+  void _loadBbtAnalysis({CycleModel? cycle}) {
+    if (!mounted) return;
+    try {
+      final obsBloc = context.read<ObservationBloc>();
+      if (cycle != null) {
+        obsBloc.add(LoadBbtAnalysisEvent(
+          startDate: cycle.dateDebut,
+          endDate: cycle.dateFin ?? DateTime.now().toIso8601String().substring(0, 10),
+        ));
+      } else if (_selectedPeriod != 'all') {
+        final now = DateTime.now();
+        final days = _selectedPeriod == '3m' ? 90 : (_selectedPeriod == '6m' ? 180 : 365);
+        final cutoff = now.subtract(Duration(days: days)).toIso8601String().substring(0, 10);
+        obsBloc.add(LoadBbtAnalysisEvent(startDate: cutoff));
+      } else {
+        obsBloc.add(const LoadBbtAnalysisEvent());
+      }
+    } catch (_) {}
   }
 
   Future<void> _loadProfile() async {
@@ -99,6 +126,7 @@ class _CycleStatsScreenState extends State<CycleStatsScreen> {
     HapticFeedback.lightImpact();
     context.read<CycleBloc>().add(LoadCycleStatsEvent());
     context.read<CycleBloc>().add(LoadCyclesEvent());
+    _loadBbtAnalysis();
     await _loadProfile();
     await Future.delayed(const Duration(milliseconds: 700));
   }
@@ -436,7 +464,11 @@ class _CycleStatsScreenState extends State<CycleStatsScreen> {
             _buildCycleLengthBarChart(filteredData, allCycles),
             const SizedBox(height: 20),
 
-            // 5. Bilan des Douleurs Menstruelles & Intensités de Flux
+            // 5. Courbe biphasique de température basale (UC-16 DataViz BBT)
+            _buildBbtAnalysisSection(allCycles),
+            const SizedBox(height: 20),
+
+            // 6. Bilan des Douleurs Menstruelles & Intensités de Flux
             _buildPainAndFlowCard(painMetrics),
             const SizedBox(height: 20),
 
@@ -485,6 +517,7 @@ class _CycleStatsScreenState extends State<CycleStatsScreen> {
                     _selectedPeriod = p['key']!;
                     _selectedCycleId = null;
                   });
+                  _loadBbtAnalysis();
                 }
               },
               borderRadius: BorderRadius.circular(12),
@@ -928,9 +961,11 @@ class _CycleStatsScreenState extends State<CycleStatsScreen> {
                       return InkWell(
                         onTap: () {
                           HapticFeedback.selectionClick();
+                          final newSelected = isSelected ? null : cycle;
                           setState(() {
-                            _selectedCycleId = isSelected ? null : cycle.id;
+                            _selectedCycleId = newSelected?.id;
                           });
+                          _loadBbtAnalysis(cycle: newSelected);
                         },
                         borderRadius: BorderRadius.circular(10),
                         child: AnimatedContainer(
@@ -1097,7 +1132,134 @@ class _CycleStatsScreenState extends State<CycleStatsScreen> {
     );
   }
 
-  // 5. Bilan des Douleurs Menstruelles & Intensités de Flux
+  // 5. Courbe biphasique de température basale (UC-16 DataViz BBT)
+  Widget _buildBbtAnalysisSection(List<CycleModel> allCycles) {
+    CycleModel? activeCycle;
+    if (_selectedCycleId != null) {
+      try {
+        activeCycle = allCycles.firstWhere((c) => c.id == _selectedCycleId);
+      } catch (_) {}
+    } else if (allCycles.isNotEmpty) {
+      try {
+        activeCycle = allCycles.firstWhere((c) => c.isEnCours);
+      } catch (_) {
+        activeCycle = allCycles.first;
+      }
+    }
+
+    return BlocBuilder<ObservationBloc, ObservationState>(
+      buildWhen: (prev, curr) =>
+          curr is BbtAnalysisLoadedState ||
+          curr is ObservationLoadingState ||
+          curr is ObservationFailureState,
+      builder: (context, obsState) {
+        BbtAnalysisModel? analysis;
+        bool isLoading = false;
+
+        if (obsState is BbtAnalysisLoadedState) {
+          analysis = obsState.analysis;
+        } else {
+          analysis = context.read<ObservationBloc>().cachedBbtAnalysis;
+          if (obsState is ObservationLoadingState && analysis == null) {
+            isLoading = true;
+          }
+        }
+
+        if (isLoading) {
+          return GlassCard(
+            padding: const EdgeInsets.all(20),
+            borderRadius: 24,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const ShimmerBone(width: 42, height: 42, borderRadius: 14, opacity: 0.6),
+                    const SizedBox(width: 12),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: const [
+                        ShimmerBone(width: 140, height: 16, borderRadius: 6, opacity: 0.6),
+                        SizedBox(height: 6),
+                        ShimmerBone(width: 190, height: 12, borderRadius: 6, opacity: 0.4),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                const ShimmerBone(width: double.infinity, height: 180, borderRadius: 16, opacity: 0.5),
+              ],
+            ),
+          );
+        }
+
+        final bbtAnalysis = analysis ??
+            const BbtAnalysisModel(
+              status: 'insufficient_data',
+              message:
+                  'Enregistrez chaque matin votre température au réveil pour détecter automatiquement votre décalage thermique post-ovulation (+0.2°C à +0.5°C).',
+              shiftDetected: false,
+              points: [],
+            );
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (activeCycle != null && _selectedCycleId != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8, left: 4, right: 4),
+                child: Row(
+                  children: [
+                    const Icon(Icons.tune_rounded, size: 14, color: AppTheme.primary),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'Zoom sur le cycle du ${_formatShortDate(activeCycle.dateDebut)}${activeCycle.dateFin != null ? ' au ${_formatShortDate(activeCycle.dateFin)}' : ' (en cours)'}',
+                        style: const TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.primary,
+                        ),
+                      ),
+                    ),
+                    InkWell(
+                      onTap: () {
+                        HapticFeedback.selectionClick();
+                        setState(() => _selectedCycleId = null);
+                        _loadBbtAnalysis();
+                      },
+                      child: const Text(
+                        'Vue globale',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.textMuted,
+                          decoration: TextDecoration.underline,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            BbtChartWidget(
+              analysis: bbtAnalysis,
+              onAddTemperature: () async {
+                final res = await ObservationEntryBottomSheet.show(
+                  context,
+                  date: DateTime.now(),
+                );
+                if (res == true && mounted) {
+                  _loadBbtAnalysis(cycle: activeCycle);
+                }
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // 6. Bilan des Douleurs Menstruelles & Intensités de Flux
   Widget _buildPainAndFlowCard(_PainAndFlowMetrics metrics) {
     final hasPainData = metrics.totalPainDays > 0;
     final hasFlowData = metrics.totalFlowDays > 0;
@@ -1468,10 +1630,28 @@ class _CycleStatsScreenState extends State<CycleStatsScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(name, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.textDark)),
-                  Text(days, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color)),
+                  Expanded(
+                    child: Text(
+                      name,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.textDark,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    days,
+                    textAlign: TextAlign.end,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: color,
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 1),

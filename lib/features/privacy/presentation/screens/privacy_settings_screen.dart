@@ -6,6 +6,7 @@ import '../../../../core/error/api_exception.dart';
 import '../../../../core/error/error_feedback.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/modern_app_header.dart';
+import '../../../../core/widgets/glass_skeleton_loader.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../auth/presentation/bloc/auth_event.dart';
 import '../../../users/data/models/user_profile_model.dart';
@@ -211,7 +212,7 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
         onRefresh: _loadAll,
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: AppTheme.primary))
+          ? const PrivacySkeletonView()
           : _errorMessage != null
               ? RefreshIndicator(
                   color: AppTheme.primary,
@@ -387,7 +388,7 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
                                             _formatConsentName(c.typeConsentement),
                                             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppTheme.textDark),
                                           ),
-                                          Text('Version ${c.versionDocument} • Date: ${c.dateConsentement?.substring(0, 10) ?? "N/A"}',
+                                          Text('Version ${c.versionDocument} • Date: ${_formatDate(c.dateConsentement)}',
                                               style: const TextStyle(fontSize: 11, color: AppTheme.textLight)),
                                         ],
                                       ),
@@ -438,7 +439,7 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
                                           Text(sess.nomAppareil, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppTheme.textDark)),
-                                          Text('Connecté le ${sess.dateConnexion.substring(0, 10)}', style: const TextStyle(fontSize: 11, color: AppTheme.textLight)),
+                                          Text('Actif le ${_formatDate(sess.dateConnexion)}', style: const TextStyle(fontSize: 11, color: AppTheme.textLight)),
                                         ],
                                       ),
                                     ),
@@ -499,6 +500,17 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
                 ),
               ),
     );
+  }
+
+  String _formatDate(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return 'Récemment';
+    try {
+      final d = DateTime.parse(raw);
+      return '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+    } catch (_) {
+      if (raw.length >= 10) return raw.substring(0, 10);
+      return raw;
+    }
   }
 
   String _formatConsentName(String code) {

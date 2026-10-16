@@ -72,5 +72,9 @@ class ApiConstants {
   static const String observationsDay = '/observations/day';
   static String observationsForDay(String date) => '/observations/days/$date';
   static const String observationsHistory = '/observations/history';
+  static const String observationsBbtAnalysis = '/observations/temperature/bbt-analysis';
+  static const String observationsSyncBatch = '/observations/sync/batch';
+  static const String observationsIntercourse = '/observations/intercourse';
+  static String observationsDeleteIntercourse(String date) => '/observations/intercourse/$date';
 }
 

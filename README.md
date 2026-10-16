@@ -16,20 +16,20 @@
 
 ## 2. Documentation Complète du Frontend
 
-Consultez le dossier [`doc/`](file:///c:/Sikirou/eskay/FEMAX/FertiliteApp/frontend/doc) pour les spécifications exhaustives :
-- [01 — Document de Cadrage Mobile](file:///c:/Sikirou/eskay/FEMAX/FertiliteApp/frontend/doc/01-document-cadrage.md)
-- [02 — Cahier des Charges Mobile](file:///c:/Sikirou/eskay/FEMAX/FertiliteApp/frontend/doc/02-cahier-des-charges.md)
-- [03 — Spécifications des Écrans (UC-01 à UC-26)](file:///c:/Sikirou/eskay/FEMAX/FertiliteApp/frontend/doc/03-specifications-fonctionnelles.md)
-- [04 — Architecture Clean & BLoC Flutter](file:///c:/Sikirou/eskay/FEMAX/FertiliteApp/frontend/doc/04-architecture-technique.md)
-- [05 — Moteur Offline-First & Synchronisation](file:///c:/Sikirou/eskay/FEMAX/FertiliteApp/frontend/doc/05-specifications-techniques.md)
-- [06 — Base de Données Locale Drift & SQLCipher](file:///c:/Sikirou/eskay/FEMAX/FertiliteApp/frontend/doc/06-base-de-donnees.md)
-- [07 — Client API Réseau Dio](file:///c:/Sikirou/eskay/FEMAX/FertiliteApp/frontend/doc/07-api.md)
-- [08 — Directives de Code Dart 3 & BLoC](file:///c:/Sikirou/eskay/FEMAX/FertiliteApp/frontend/doc/08-documentation-code.md)
-- [09 — Stratégie de Tests Mobile (Unit, Widget, Integration)](file:///c:/Sikirou/eskay/FEMAX/FertiliteApp/frontend/doc/09-tests.md)
-- [10 — Déploiement Stores Google Play & App Store](file:///c:/Sikirou/eskay/FEMAX/FertiliteApp/frontend/doc/10-deploiement.md)
-- [11 — Stratégie Mobile, Télémétrie & Freemium](file:///c:/Sikirou/eskay/FEMAX/FertiliteApp/frontend/doc/11-doc-strategie-.md)
-- [12 — Design System, Ergonomie & Charte Chromatique](file:///c:/Sikirou/eskay/FEMAX/FertiliteApp/frontend/doc/12-doc-fonctionnelles.md)
-- Dossiers spécialisés : [`architecture/`](file:///c:/Sikirou/eskay/FEMAX/FertiliteApp/frontend/doc/architecture), [`database/`](file:///c:/Sikirou/eskay/FEMAX/FertiliteApp/frontend/doc/database), [`deployment/`](file:///c:/Sikirou/eskay/FEMAX/FertiliteApp/frontend/doc/deployment), [`operations/`](file:///c:/Sikirou/eskay/FEMAX/FertiliteApp/frontend/doc/operations), [`security/`](file:///c:/Sikirou/eskay/FEMAX/FertiliteApp/frontend/doc/security), [`testing/`](file:///c:/Sikirou/eskay/FEMAX/FertiliteApp/frontend/doc/testing), [`adr/`](file:///c:/Sikirou/eskay/FEMAX/FertiliteApp/frontend/doc/adr).
+Consultez le dossier [`doc/`](file:///c:/Sikirou/eskay/FertiliteApp/FertiliteApp/frontend/doc) pour les spécifications exhaustives :
+- [01 — Document de Cadrage Mobile](file:///c:/Sikirou/eskay/FertiliteApp/FertiliteApp/frontend/doc/01-document-cadrage.md)
+- [02 — Cahier des Charges Mobile](file:///c:/Sikirou/eskay/FertiliteApp/FertiliteApp/frontend/doc/02-cahier-des-charges.md)
+- [03 — Spécifications des Écrans (UC-01 à UC-26)](file:///c:/Sikirou/eskay/FertiliteApp/FertiliteApp/frontend/doc/03-specifications-fonctionnelles.md)
+- [04 — Architecture Clean & BLoC Flutter](file:///c:/Sikirou/eskay/FertiliteApp/FertiliteApp/frontend/doc/04-architecture-technique.md)
+- [05 — Moteur Offline-First & Synchronisation](file:///c:/Sikirou/eskay/FertiliteApp/FertiliteApp/frontend/doc/05-specifications-techniques.md)
+- [06 — Base de Données Locale Drift & SQLCipher](file:///c:/Sikirou/eskay/FertiliteApp/FertiliteApp/frontend/doc/06-base-de-donnees.md)
+- [07 — Client API Réseau Dio](file:///c:/Sikirou/eskay/FertiliteApp/FertiliteApp/frontend/doc/07-api.md)
+- [08 — Directives de Code Dart 3 & BLoC](file:///c:/Sikirou/eskay/FertiliteApp/FertiliteApp/frontend/doc/08-documentation-code.md)
+- [09 — Stratégie de Tests Mobile (Unit, Widget, Integration)](file:///c:/Sikirou/eskay/FertiliteApp/FertiliteApp/frontend/doc/09-tests.md)
+- [10 — Déploiement Stores Google Play & App Store](file:///c:/Sikirou/eskay/FertiliteApp/FertiliteApp/frontend/doc/10-deploiement.md)
+- [11 — Stratégie Mobile, Télémétrie & Freemium](file:///c:/Sikirou/eskay/FertiliteApp/FertiliteApp/frontend/doc/11-doc-strategie-.md)
+- [12 — Design System, Ergonomie & Charte Chromatique](file:///c:/Sikirou/eskay/FertiliteApp/FertiliteApp/frontend/doc/12-doc-fonctionnelles.md)
+- Dossiers spécialisés : [`architecture/`](file:///c:/Sikirou/eskay/FertiliteApp/FertiliteApp/frontend/doc/architecture), [`database/`](file:///c:/Sikirou/eskay/FertiliteApp/FertiliteApp/frontend/doc/database), [`deployment/`](file:///c:/Sikirou/eskay/FertiliteApp/FertiliteApp/frontend/doc/deployment), [`operations/`](file:///c:/Sikirou/eskay/FertiliteApp/FertiliteApp/frontend/doc/operations), [`security/`](file:///c:/Sikirou/eskay/FertiliteApp/FertiliteApp/frontend/doc/security), [`testing/`](file:///c:/Sikirou/eskay/FertiliteApp/FertiliteApp/frontend/doc/testing), [`adr/`](file:///c:/Sikirou/eskay/FertiliteApp/FertiliteApp/frontend/doc/adr).
 
 ---
 

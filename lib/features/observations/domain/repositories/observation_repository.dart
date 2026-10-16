@@ -11,4 +11,9 @@ abstract class IObservationRepository {
   Future<void> deleteCervicalMucus(String date);
   Future<void> deleteLhTest(String id);
   Future<void> deleteSymptom(String id);
+  Future<RapportSexuelModel> logIntercourse(RapportSexuelModel intercourse);
+  Future<void> deleteIntercourse(String date);
+  Future<BbtAnalysisModel> getBbtAnalysis({String? startDate, String? endDate});
+  Future<ObservationSyncReport> syncPendingObservations();
+  Future<int> getPendingSyncCount();
 }

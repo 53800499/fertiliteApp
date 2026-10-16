@@ -10,6 +10,9 @@ class ObservationBloc extends Bloc<ObservationEvent, ObservationState> {
   List<TypeSymptomeModel> cachedCatalog = [];
   final Map<String, DayObservationsModel> cachedDays = {};
 
+  BbtAnalysisModel? cachedBbtAnalysis;
+  int pendingSyncCount = 0;
+
   ObservationBloc({required this.observationRepository})
       : super(ObservationInitialState()) {
     on<LoadSymptomCatalogEvent>(_onLoadSymptomCatalog);
@@ -18,6 +21,10 @@ class ObservationBloc extends Bloc<ObservationEvent, ObservationState> {
     on<DeleteTemperatureEvent>(_onDeleteTemperature);
     on<DeleteCervicalMucusEvent>(_onDeleteCervicalMucus);
     on<DeleteLhTestEvent>(_onDeleteLhTest);
+    on<DeleteIntercourseEvent>(_onDeleteIntercourse);
+    on<LoadBbtAnalysisEvent>(_onLoadBbtAnalysis);
+    on<SyncPendingObservationsEvent>(_onSyncPendingObservations);
+    on<CheckPendingSyncCountEvent>(_onCheckPendingSyncCount);
   }
 
   Future<void> _onLoadSymptomCatalog(
@@ -87,6 +94,9 @@ class ObservationBloc extends Bloc<ObservationEvent, ObservationState> {
           catalog: cachedCatalog,
         ),
       );
+      if (event.request.temperature != null) {
+        add(const LoadBbtAnalysisEvent());
+      }
     } on ApiException catch (e) {
       emit(ObservationFailureState(e.message));
     } catch (e) {
@@ -101,6 +111,7 @@ class ObservationBloc extends Bloc<ObservationEvent, ObservationState> {
     try {
       await observationRepository.deleteTemperature(event.date);
       add(LoadDayObservationsEvent(event.date));
+      add(const LoadBbtAnalysisEvent());
     } catch (e) {
       emit(ObservationFailureState('Erreur lors de la suppression: $e'));
     }
@@ -127,6 +138,83 @@ class ObservationBloc extends Bloc<ObservationEvent, ObservationState> {
       add(LoadDayObservationsEvent(event.date));
     } catch (e) {
       emit(ObservationFailureState('Erreur lors de la suppression: $e'));
+    }
+  }
+
+  Future<void> _onDeleteIntercourse(
+    DeleteIntercourseEvent event,
+    Emitter<ObservationState> emit,
+  ) async {
+    try {
+      await observationRepository.deleteIntercourse(event.date);
+      add(LoadDayObservationsEvent(event.date));
+    } catch (e) {
+      emit(ObservationFailureState('Erreur lors de la suppression: $e'));
+    }
+  }
+
+  Future<void> _onLoadBbtAnalysis(
+    LoadBbtAnalysisEvent event,
+    Emitter<ObservationState> emit,
+  ) async {
+    if (cachedBbtAnalysis != null) {
+      emit(BbtAnalysisLoadedState(analysis: cachedBbtAnalysis!, isRefreshing: true));
+    } else {
+      emit(ObservationLoadingState());
+    }
+    try {
+      final analysis = await observationRepository.getBbtAnalysis(
+        startDate: event.startDate,
+        endDate: event.endDate,
+      );
+      cachedBbtAnalysis = analysis;
+      emit(BbtAnalysisLoadedState(analysis: analysis));
+    } catch (e) {
+      if (cachedBbtAnalysis != null) {
+        emit(BbtAnalysisLoadedState(analysis: cachedBbtAnalysis!));
+      } else {
+        emit(ObservationFailureState(ApiException.getDisplayMessage(e)));
+      }
+    }
+  }
+
+  Future<void> _onCheckPendingSyncCount(
+    CheckPendingSyncCountEvent event,
+    Emitter<ObservationState> emit,
+  ) async {
+    try {
+      pendingSyncCount = await observationRepository.getPendingSyncCount();
+    } catch (_) {}
+  }
+
+  Future<void> _onSyncPendingObservations(
+    SyncPendingObservationsEvent event,
+    Emitter<ObservationState> emit,
+  ) async {
+    final count = await observationRepository.getPendingSyncCount();
+    if (count == 0) return;
+
+    if (!event.isAutomatic) {
+      emit(ObservationsSyncInProgressState(pendingCount: count));
+    }
+
+    try {
+      final report = await observationRepository.syncPendingObservations();
+      pendingSyncCount = report.remainingCount;
+
+      // Invalider le cache mémoire pour recharger depuis les données fraîches
+      cachedDays.clear();
+
+      emit(ObservationsSyncSuccessState(report: report));
+
+      // Recharger l'analyse BBT et le catalogue
+      add(const LoadBbtAnalysisEvent());
+      add(LoadSymptomCatalogEvent());
+    } catch (e) {
+      pendingSyncCount = await observationRepository.getPendingSyncCount();
+      if (!event.isAutomatic) {
+        emit(ObservationFailureState('Échec de synchronisation : $e'));
+      }
     }
   }
 }

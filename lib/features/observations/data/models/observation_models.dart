@@ -71,6 +71,101 @@ class LhResult {
   static bool isPeak(String res) => res == positif || res == pic;
 }
 
+/// Type de rapport intime (UC-24)
+class TypeRapport {
+  static const String protege = 'protege';
+  static const String nonProtege = 'non_protege';
+
+  static String getLabel(String type) {
+    switch (type) {
+      case protege:
+        return 'Protégé (préservatif, etc.)';
+      case nonProtege:
+        return 'Non protégé';
+      default:
+        return type;
+    }
+  }
+
+  static bool isProtege(String type) => type == protege;
+}
+
+/// Modèle Rapport Intime (UC-24 avec chiffrement applicatif AES-256)
+class RapportSexuelModel extends Equatable {
+  final String? id;
+  final String date;
+  final String typeRapport; // 'protege' | 'non_protege'
+  final String? heure;
+  final bool contraceptionUrgence;
+  final String? notes; // Notes privées déchiffrées
+  final String? idClientLocal;
+
+  const RapportSexuelModel({
+    this.id,
+    required this.date,
+    required this.typeRapport,
+    this.heure,
+    this.contraceptionUrgence = false,
+    this.notes,
+    this.idClientLocal,
+  });
+
+  factory RapportSexuelModel.fromJson(Map<String, dynamic> json) {
+    String rawDate = (json['date'] as String? ?? '').trim();
+    if (rawDate.length >= 10) rawDate = rawDate.substring(0, 10);
+    return RapportSexuelModel(
+      id: json['id'] as String?,
+      date: rawDate,
+      typeRapport: (json['typeRapport'] ?? json['type_rapport']) as String? ?? TypeRapport.nonProtege,
+      heure: (json['heure'] as String?)?.trim(),
+      contraceptionUrgence: (json['contraceptionUrgence'] ?? json['contraception_urgence']) as bool? ?? false,
+      notes: json['notes'] as String?,
+      idClientLocal: (json['idClientLocal'] ?? json['id_client_local']) as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        if (id != null) 'id': id,
+        'date': date,
+        'typeRapport': typeRapport,
+        if (heure != null && heure!.isNotEmpty) 'heure': heure,
+        'contraceptionUrgence': contraceptionUrgence,
+        if (notes != null) 'notes': notes,
+        if (idClientLocal != null) 'idClientLocal': idClientLocal,
+      };
+
+  RapportSexuelModel copyWith({
+    String? id,
+    String? date,
+    String? typeRapport,
+    String? heure,
+    bool? contraceptionUrgence,
+    String? notes,
+    String? idClientLocal,
+  }) {
+    return RapportSexuelModel(
+      id: id ?? this.id,
+      date: date ?? this.date,
+      typeRapport: typeRapport ?? this.typeRapport,
+      heure: heure ?? this.heure,
+      contraceptionUrgence: contraceptionUrgence ?? this.contraceptionUrgence,
+      notes: notes ?? this.notes,
+      idClientLocal: idClientLocal ?? this.idClientLocal,
+    );
+  }
+
+  @override
+  List<Object?> get props => [
+        id,
+        date,
+        typeRapport,
+        heure,
+        contraceptionUrgence,
+        notes,
+        idClientLocal,
+      ];
+}
+
 /// Modèle Température Basale (UC-16)
 class TemperatureBasaleModel extends Equatable {
   final String? id;
@@ -351,13 +446,15 @@ class ObservationSymptomeModel extends Equatable {
   List<Object?> get props => [id, date, typeSymptomeId, typeSymptome, intensite, notes];
 }
 
-/// Détail agrégé de toutes les observations d'un jour (UC-12)
+/// Détail agrégé de toutes les observations d'un jour (UC-12 & UC-24)
 class DayObservationsModel extends Equatable {
   final String date;
   final TemperatureBasaleModel? temperature;
   final GlaireCervicaleModel? glaire;
   final List<TestOvulationModel> testsLh;
   final List<ObservationSymptomeModel> symptomes;
+  final RapportSexuelModel? rapport;
+  final bool isPendingSync;
 
   const DayObservationsModel({
     required this.date,
@@ -365,6 +462,8 @@ class DayObservationsModel extends Equatable {
     this.glaire,
     this.testsLh = const [],
     this.symptomes = const [],
+    this.rapport,
+    this.isPendingSync = false,
   });
 
   factory DayObservationsModel.fromJson(Map<String, dynamic> json) {
@@ -386,6 +485,43 @@ class DayObservationsModel extends Equatable {
               ?.map((e) => ObservationSymptomeModel.fromJson(e as Map<String, dynamic>))
               .toList() ??
           [],
+      rapport: json['rapport'] != null
+          ? RapportSexuelModel.fromJson(json['rapport'] as Map<String, dynamic>)
+          : null,
+      isPendingSync: (json['isPendingSync'] ?? json['is_pending_sync']) as bool? ?? false,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'date': date,
+        if (temperature != null) 'temperature': temperature!.toJson(),
+        if (glaire != null) 'glaire': glaire!.toJson(),
+        'testsLh': testsLh.map((t) => t.toJson()).toList(),
+        'symptomes': symptomes.map((s) => s.toJson()).toList(),
+        if (rapport != null) 'rapport': rapport!.toJson(),
+        'isPendingSync': isPendingSync,
+      };
+
+  DayObservationsModel copyWith({
+    String? date,
+    TemperatureBasaleModel? temperature,
+    GlaireCervicaleModel? glaire,
+    List<TestOvulationModel>? testsLh,
+    List<ObservationSymptomeModel>? symptomes,
+    RapportSexuelModel? rapport,
+    bool? isPendingSync,
+    bool clearTemperature = false,
+    bool clearGlaire = false,
+    bool clearRapport = false,
+  }) {
+    return DayObservationsModel(
+      date: date ?? this.date,
+      temperature: clearTemperature ? null : (temperature ?? this.temperature),
+      glaire: clearGlaire ? null : (glaire ?? this.glaire),
+      testsLh: testsLh ?? this.testsLh,
+      symptomes: symptomes ?? this.symptomes,
+      rapport: clearRapport ? null : (rapport ?? this.rapport),
+      isPendingSync: isPendingSync ?? this.isPendingSync,
     );
   }
 
@@ -393,10 +529,11 @@ class DayObservationsModel extends Equatable {
       temperature != null ||
       glaire != null ||
       testsLh.isNotEmpty ||
-      symptomes.isNotEmpty;
+      symptomes.isNotEmpty ||
+      rapport != null;
 
   @override
-  List<Object?> get props => [date, temperature, glaire, testsLh, symptomes];
+  List<Object?> get props => [date, temperature, glaire, testsLh, symptomes, rapport, isPendingSync];
 }
 
 /// DTO de soumission journalière globale
@@ -406,6 +543,8 @@ class SaveDayObservationRequest {
   final GlaireCervicaleModel? glaire;
   final TestOvulationModel? testLh;
   final List<ObservationSymptomeModel>? symptomes;
+  final RapportSexuelModel? rapport;
+  final String? idClientLocal;
 
   const SaveDayObservationRequest({
     required this.date,
@@ -413,11 +552,36 @@ class SaveDayObservationRequest {
     this.glaire,
     this.testLh,
     this.symptomes,
+    this.rapport,
+    this.idClientLocal,
   });
+
+  factory SaveDayObservationRequest.fromJson(Map<String, dynamic> json) {
+    return SaveDayObservationRequest(
+      date: (json['date'] as String? ?? '').trim(),
+      temperature: json['temperature'] != null
+          ? TemperatureBasaleModel.fromJson(json['temperature'] as Map<String, dynamic>)
+          : null,
+      glaire: json['glaire'] != null
+          ? GlaireCervicaleModel.fromJson(json['glaire'] as Map<String, dynamic>)
+          : null,
+      testLh: json['testLh'] != null
+          ? TestOvulationModel.fromJson(json['testLh'] as Map<String, dynamic>)
+          : null,
+      symptomes: (json['symptomes'] as List<dynamic>?)
+          ?.map((e) => ObservationSymptomeModel.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      rapport: json['rapport'] != null
+          ? RapportSexuelModel.fromJson(json['rapport'] as Map<String, dynamic>)
+          : null,
+      idClientLocal: json['idClientLocal'] as String?,
+    );
+  }
 
   Map<String, dynamic> toJson() {
     return {
       'date': date,
+      if (idClientLocal != null) 'idClientLocal': idClientLocal,
       if (temperature != null) 'temperature': {...temperature!.toJson(), 'date': date},
       if (glaire != null) 'glaire': {...glaire!.toJson(), 'date': date},
       if (testLh != null) 'testLh': {...testLh!.toJson(), 'date': date},
@@ -429,6 +593,271 @@ class SaveDayObservationRequest {
                   if (s.notes != null) 'notes': s.notes,
                 })
             .toList(),
+      if (rapport != null) 'rapport': {...rapport!.toJson(), 'date': date},
     };
   }
+}
+
+/// Type d'opération mise en file d'attente hors-ligne (Option C & UC-24)
+enum ObservationSyncMutationType {
+  saveDayObservation,
+  deleteTemperature,
+  deleteCervicalMucus,
+  deleteLhTest,
+  deleteSymptom,
+  deleteIntercourse,
+}
+
+/// Élément de mutation persistant en attente de synchronisation
+class QueuedObservationMutation extends Equatable {
+  final String id;
+  final ObservationSyncMutationType type;
+  final String date;
+  final SaveDayObservationRequest? request;
+  final String? targetId;
+  final DateTime clientTimestamp;
+  final int retryCount;
+
+  const QueuedObservationMutation({
+    required this.id,
+    required this.type,
+    required this.date,
+    this.request,
+    this.targetId,
+    required this.clientTimestamp,
+    this.retryCount = 0,
+  });
+
+  factory QueuedObservationMutation.fromJson(Map<String, dynamic> json) {
+    return QueuedObservationMutation(
+      id: json['id'] as String,
+      type: ObservationSyncMutationType.values.firstWhere(
+        (t) => t.name == json['type'],
+        orElse: () => ObservationSyncMutationType.saveDayObservation,
+      ),
+      date: json['date'] as String,
+      request: json['request'] != null
+          ? SaveDayObservationRequest.fromJson(json['request'] as Map<String, dynamic>)
+          : null,
+      targetId: json['targetId'] as String?,
+      clientTimestamp: DateTime.tryParse(json['clientTimestamp'] as String? ?? '') ?? DateTime.now(),
+      retryCount: (json['retryCount'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'type': type.name,
+        'date': date,
+        if (request != null) 'request': request!.toJson(),
+        if (targetId != null) 'targetId': targetId,
+        'clientTimestamp': clientTimestamp.toIso8601String(),
+        'retryCount': retryCount,
+      };
+
+  QueuedObservationMutation copyWithIncrementedRetry() {
+    return QueuedObservationMutation(
+      id: id,
+      type: type,
+      date: date,
+      request: request,
+      targetId: targetId,
+      clientTimestamp: clientTimestamp,
+      retryCount: retryCount + 1,
+    );
+  }
+
+  @override
+  List<Object?> get props => [id, type, date, request, targetId, clientTimestamp, retryCount];
+}
+
+/// Rapport de synchronisation bidirectionnelle
+class ObservationSyncReport extends Equatable {
+  final int syncedCount;
+  final int failedCount;
+  final int remainingCount;
+  final DateTime syncedAt;
+  final String? message;
+
+  const ObservationSyncReport({
+    required this.syncedCount,
+    required this.failedCount,
+    required this.remainingCount,
+    required this.syncedAt,
+    this.message,
+  });
+
+  bool get hasRemaining => remainingCount > 0;
+  bool get isFullSuccess => failedCount == 0 && remainingCount == 0;
+
+  @override
+  List<Object?> get props => [syncedCount, failedCount, remainingCount, syncedAt, message];
+}
+
+/// Point de données pour la courbe thermique continue (UC-16 DataViz)
+class BbtPointModel extends Equatable {
+  final String date;
+  final int cycleDay;
+  final double temperatureCelsius;
+  final String? heurePrise;
+  final bool estPerturbee;
+  final String? facteurPerturbateur;
+  final String? typeGlaire;
+  final bool isAboveCoverline;
+  final String phase; // 'follicular' | 'luteal' | 'potential_luteal'
+
+  const BbtPointModel({
+    required this.date,
+    required this.cycleDay,
+    required this.temperatureCelsius,
+    this.heurePrise,
+    this.estPerturbee = false,
+    this.facteurPerturbateur,
+    this.typeGlaire,
+    this.isAboveCoverline = false,
+    this.phase = 'follicular',
+  });
+
+  factory BbtPointModel.fromJson(Map<String, dynamic> json) {
+    return BbtPointModel(
+      date: (json['date'] as String? ?? '').trim(),
+      cycleDay: ((json['cycleDay'] ?? json['cycle_day'] ?? 1) as num).toInt(),
+      temperatureCelsius: (json['temperatureCelsius'] ?? json['temperature_celsius'] is num)
+          ? (json['temperatureCelsius'] ?? json['temperature_celsius'] as num).toDouble()
+          : double.tryParse(json['temperatureCelsius']?.toString() ?? '36.5') ?? 36.5,
+      heurePrise: (json['heurePrise'] ?? json['heure_prise']) as String?,
+      estPerturbee: (json['estPerturbee'] ?? json['est_perturbee']) as bool? ?? false,
+      facteurPerturbateur: (json['facteurPerturbateur'] ?? json['facteur_perturbateur']) as String?,
+      typeGlaire: (json['typeGlaire'] ?? json['type_glaire']) as String?,
+      isAboveCoverline: (json['isAboveCoverline'] ?? json['is_above_coverline']) as bool? ?? false,
+      phase: (json['phase'] as String?) ?? 'follicular',
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'date': date,
+        'cycleDay': cycleDay,
+        'temperatureCelsius': temperatureCelsius,
+        if (heurePrise != null) 'heurePrise': heurePrise,
+        'estPerturbee': estPerturbee,
+        if (facteurPerturbateur != null) 'facteurPerturbateur': facteurPerturbateur,
+        if (typeGlaire != null) 'typeGlaire': typeGlaire,
+        'isAboveCoverline': isAboveCoverline,
+        'phase': phase,
+      };
+
+  @override
+  List<Object?> get props => [
+        date,
+        cycleDay,
+        temperatureCelsius,
+        heurePrise,
+        estPerturbee,
+        facteurPerturbateur,
+        typeGlaire,
+        isAboveCoverline,
+        phase,
+      ];
+}
+
+/// Modèle d'analyse thermique globale symptothermique (UC-16 DataViz)
+class BbtAnalysisModel extends Equatable {
+  final String status; // 'biphasic_confirmed' | 'follicular_phase' | 'potential_shift' | 'monophasic_suspected' | 'insufficient_data'
+  final String message;
+  final double? coverlineCelsius;
+  final bool shiftDetected;
+  final String? shiftDate;
+  final double? shiftDeltaCelsius;
+  final String? nadirDate;
+  final double? nadirTemperatureCelsius;
+  final double? follicularAvgCelsius;
+  final double? lutealAvgCelsius;
+  final int lutealPhaseDays;
+  final List<BbtPointModel> points;
+
+  const BbtAnalysisModel({
+    required this.status,
+    required this.message,
+    this.coverlineCelsius,
+    this.shiftDetected = false,
+    this.shiftDate,
+    this.shiftDeltaCelsius,
+    this.nadirDate,
+    this.nadirTemperatureCelsius,
+    this.follicularAvgCelsius,
+    this.lutealAvgCelsius,
+    this.lutealPhaseDays = 0,
+    required this.points,
+  });
+
+  String get statusBadgeLabel {
+    switch (status) {
+      case 'biphasic_confirmed':
+        return 'Courbe biphasique confirmée';
+      case 'potential_shift':
+        return 'Décalage en confirmation';
+      case 'follicular_phase':
+        return 'Plateau folliculaire bas';
+      case 'monophasic_suspected':
+        return 'Courbe monophasique';
+      default:
+        return 'Mesures insuffisantes';
+    }
+  }
+
+  factory BbtAnalysisModel.fromJson(Map<String, dynamic> json) {
+    double? parseDouble(dynamic val) {
+      if (val == null) return null;
+      if (val is num) return val.toDouble();
+      return double.tryParse(val.toString());
+    }
+
+    final pointsRaw = (json['points'] as List<dynamic>?) ?? [];
+
+    return BbtAnalysisModel(
+      status: (json['status'] as String?) ?? 'insufficient_data',
+      message: (json['message'] as String?) ?? '',
+      coverlineCelsius: parseDouble(json['coverlineCelsius'] ?? json['coverline_celsius']),
+      shiftDetected: (json['shiftDetected'] ?? json['shift_detected']) as bool? ?? false,
+      shiftDate: (json['shiftDate'] ?? json['shift_date']) as String?,
+      shiftDeltaCelsius: parseDouble(json['shiftDeltaCelsius'] ?? json['shift_delta_celsius']),
+      nadirDate: (json['nadirDate'] ?? json['nadir_date']) as String?,
+      nadirTemperatureCelsius: parseDouble(json['nadirTemperatureCelsius'] ?? json['nadir_temperature_celsius']),
+      follicularAvgCelsius: parseDouble(json['follicularAvgCelsius'] ?? json['follicular_avg_celsius']),
+      lutealAvgCelsius: parseDouble(json['lutealAvgCelsius'] ?? json['luteal_avg_celsius']),
+      lutealPhaseDays: ((json['lutealPhaseDays'] ?? json['luteal_phase_days']) as num?)?.toInt() ?? 0,
+      points: pointsRaw.map((e) => BbtPointModel.fromJson(e as Map<String, dynamic>)).toList(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'status': status,
+        'message': message,
+        if (coverlineCelsius != null) 'coverlineCelsius': coverlineCelsius,
+        'shiftDetected': shiftDetected,
+        if (shiftDate != null) 'shiftDate': shiftDate,
+        if (shiftDeltaCelsius != null) 'shiftDeltaCelsius': shiftDeltaCelsius,
+        if (nadirDate != null) 'nadirDate': nadirDate,
+        if (nadirTemperatureCelsius != null) 'nadirTemperatureCelsius': nadirTemperatureCelsius,
+        if (follicularAvgCelsius != null) 'follicularAvgCelsius': follicularAvgCelsius,
+        if (lutealAvgCelsius != null) 'lutealAvgCelsius': lutealAvgCelsius,
+        'lutealPhaseDays': lutealPhaseDays,
+        'points': points.map((p) => p.toJson()).toList(),
+      };
+
+  @override
+  List<Object?> get props => [
+        status,
+        message,
+        coverlineCelsius,
+        shiftDetected,
+        shiftDate,
+        shiftDeltaCelsius,
+        nadirDate,
+        nadirTemperatureCelsius,
+        follicularAvgCelsius,
+        lutealAvgCelsius,
+        lutealPhaseDays,
+        points,
+      ];
 }

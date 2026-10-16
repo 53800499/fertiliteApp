@@ -13,7 +13,7 @@ void main() {
                 AppFeedback.showSuccess(
                   context,
                   title: 'Connexion réussie',
-                  message: 'Bienvenue sur FEMAX !',
+                  message: 'Bienvenue sur FertiliteApp !',
                 );
               },
               child: const Text('Show Success'),
@@ -28,7 +28,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(find.text('Connexion réussie'), findsOneWidget);
-    expect(find.text('Bienvenue sur FEMAX !'), findsOneWidget);
+    expect(find.text('Bienvenue sur FertiliteApp !'), findsOneWidget);
     expect(find.byIcon(Icons.check_circle_rounded), findsOneWidget);
   });
 
