@@ -76,5 +76,18 @@ class ApiConstants {
   static const String observationsSyncBatch = '/observations/sync/batch';
   static const String observationsIntercourse = '/observations/intercourse';
   static String observationsDeleteIntercourse(String date) => '/observations/intercourse/$date';
+
+  // --- Endpoints Abonnements & Parrainage (Module 9) ---
+  static const String subscriptionsCurrent = '/subscriptions/current';
+  static const String subscriptionsPlans = '/subscriptions/plans';
+  static const String subscriptionsPolicy = '/subscriptions/policy';
+  static const String subscriptionsSubscribe = '/subscriptions/subscribe';
+  static const String subscriptionsCancel = '/subscriptions/cancel';
+  static const String subscriptionsInitiatePayment = '/subscriptions/payment/initiate';
+  static const String subscriptionsVerifyPayment = '/subscriptions/payment/verify';
+  static String subscriptionsVerifyPaymentParam(String id) => '/subscriptions/payment/verify/$id';
+  static const String referralsMyCode = '/referrals/my-code';
+  static const String referralsApply = '/referrals/apply';
+  static const String referralsHistory = '/referrals/history';
 }
 

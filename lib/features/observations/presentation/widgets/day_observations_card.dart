@@ -138,7 +138,7 @@ class DayObservationsCard extends StatelessWidget {
           ],
           if (!hasData) ...[
             Text(
-              'Ajoutez votre température, texture de glaire, test LH ou ressentis pour affiner vos prédictions.',
+              'Ajoutez votre température au réveil, la texture de vos sécrétions intimes, un test d\'ovulation ou vos ressentis pour affiner vos prédictions.',
               style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
             ),
           ] else ...[
@@ -152,7 +152,7 @@ class DayObservationsCard extends StatelessWidget {
                     icon: Icons.thermostat_rounded,
                     label: obs.temperature!.formattedTemp,
                     color: obs.temperature!.estPerturbee ? Colors.orange : Colors.indigo,
-                    subtitle: obs.temperature!.estPerturbee ? 'Perturbée' : null,
+                    subtitle: obs.temperature!.estPerturbee ? 'Perturbée' : 'Au réveil',
                   ),
 
                 // Glaire cervicale
@@ -164,11 +164,11 @@ class DayObservationsCard extends StatelessWidget {
                     badge: obs.glaire!.isFertile ? 'Fertile' : null,
                   ),
 
-                // Test LH
+                // Test d'ovulation (hormone LH)
                 if (obs.testsLh.isNotEmpty)
                   _buildPill(
                     icon: Icons.science_outlined,
-                    label: 'LH: ${obs.testsLh.first.label}',
+                    label: 'Ovulation : ${obs.testsLh.first.label}',
                     color: obs.testsLh.first.isPeak ? Colors.purple : Colors.blue,
                   ),
 
@@ -223,6 +223,7 @@ class DayObservationsCard extends StatelessWidget {
     String? badge,
   }) {
     return Container(
+      constraints: const BoxConstraints(maxWidth: 320),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.1),
@@ -234,9 +235,13 @@ class DayObservationsCard extends StatelessWidget {
         children: [
           Icon(icon, size: 14, color: color),
           const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: color),
+          Flexible(
+            child: Text(
+              label,
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: color),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
           if (badge != null) ...[
             const SizedBox(width: 6),

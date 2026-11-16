@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -9,8 +10,16 @@ import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../auth/presentation/bloc/auth_event.dart';
 import '../../../privacy/presentation/screens/privacy_settings_screen.dart';
 import '../../../notifications/presentation/screens/notification_preferences_screen.dart';
+import '../../../subscriptions/presentation/screens/subscription_screen.dart';
+import '../../../subscriptions/presentation/screens/referral_screen.dart';
+import '../../../subscriptions/presentation/bloc/subscription_bloc.dart';
+import '../../../subscriptions/presentation/bloc/subscription_state.dart';
+import '../../../super_admin/presentation/screens/super_admin_shell_screen.dart';
+import '../../../fertility/presentation/bloc/fertility_bloc.dart';
+import '../../../fertility/presentation/bloc/fertility_event.dart';
 import '../../data/models/user_profile_model.dart';
 import 'profile_setup_screen.dart';
+import '../widgets/user_objective_banner.dart';
 import '../../../../core/network/network_cubit.dart';
 import '../../../../core/widgets/offline_state_view.dart';
 import '../../../../core/widgets/modern_app_header.dart';
@@ -27,24 +36,42 @@ class _ProfileScreenState extends State<ProfileScreen> {
   FullUserProfileModel? _profile;
   bool _isLoading = true;
   String? _errorMessage;
+  StreamSubscription<FullUserProfileModel>? _profileSub;
 
   @override
   void initState() {
     super.initState();
+    // 1. Initialisation instantanée synchrone sans flash
+    _profile = ServiceLocator.userRepository.currentProfile;
+    if (_profile != null) _isLoading = false;
+
+    // 2. Écoute réactive de tout changement d'objectif ou profil
+    _profileSub = ServiceLocator.userRepository.profileStream.listen((updated) {
+      if (mounted) {
+        setState(() {
+          _profile = updated;
+          _isLoading = false;
+        });
+      }
+    });
+
     _loadProfile();
+  }
+
+  @override
+  void dispose() {
+    _profileSub?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadProfile() async {
     // 1. Chargement instantané depuis le cache local s'il existe
     if (_profile == null) {
       try {
-        final cached = await ServiceLocator.storage.getCache('cached_user_profile');
-        if (cached != null && cached.isNotEmpty && mounted) {
-          final cachedModel = FullUserProfileModel.fromJson(
-            jsonDecode(cached) as Map<String, dynamic>,
-          );
+        final cached = await ServiceLocator.userRepository.getCachedProfile();
+        if (cached != null && mounted) {
           setState(() {
-            _profile = cachedModel;
+            _profile = cached;
             _isLoading = false;
           });
         }
@@ -197,6 +224,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                       ),
                                     ),
                                   ],
+                                  const SizedBox(height: 4),
+                                  BlocBuilder<SubscriptionBloc, SubscriptionState>(
+                                    builder: (context, subState) {
+                                      final isPremium = subState is SubscriptionLoadedState && subState.subscription.isPremium;
+                                      return Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: isPremium
+                                              ? const Color(0xFFFFD54F)
+                                              : Colors.white.withValues(alpha: 0.22),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Text(
+                                          isPremium ? 'Membre Premium ⭐' : 'Plan Essentiel',
+                                          style: TextStyle(
+                                            fontSize: 10.5,
+                                            fontWeight: FontWeight.bold,
+                                            color: isPremium ? const Color(0xFF4A148C) : Colors.white,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
                                   const SizedBox(height: 6),
                                   Builder(
                                     builder: (context) {
@@ -267,12 +317,53 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       Row(
                         children: [
                           Expanded(
-                            child: _buildMetricTile(
-                              title: 'Objectif',
-                              value: _formatObjective(_profile?.profil.objectifPrincipal),
-                              subtitle: 'Orientation de calcul',
-                              icon: Icons.flag_rounded,
-                              color: AppTheme.accentRose,
+                            child: InkWell(
+                              onTap: () {
+                                ObjectiveSelectorBottomSheet.show(
+                                  context,
+                                  currentObjective:
+                                      _profile?.profil.objectifPrincipal ?? 'suivi_cycle',
+                                  onSelected: (newObjective) {
+                                    setState(() {
+                                      if (_profile != null) {
+                                        _profile = FullUserProfileModel(
+                                          id: _profile!.id,
+                                          email: _profile!.email,
+                                          role: _profile!.role,
+                                          dateNaissance: _profile!.dateNaissance,
+                                          languePreferee: _profile!.languePreferee,
+                                          fuseauHoraire: _profile!.fuseauHoraire,
+                                          parametresConfidentialite:
+                                              _profile!.parametresConfidentialite,
+                                          profil: UserProfileDetailModel(
+                                            prenom: _profile!.profil.prenom,
+                                            dureeMoyenneCycle:
+                                                _profile!.profil.dureeMoyenneCycle,
+                                            dureeMoyenneRegles:
+                                                _profile!.profil.dureeMoyenneRegles,
+                                            objectifPrincipal: newObjective,
+                                            irregulariteDeclaree:
+                                                _profile!.profil.irregulariteDeclaree,
+                                            dateDernieresReglesConnues: _profile!
+                                                .profil.dateDernieresReglesConnues,
+                                          ),
+                                        );
+                                      }
+                                    });
+                                    context
+                                        .read<FertilityBloc>()
+                                        .add(const RecalculateFertilityEvent());
+                                  },
+                                );
+                              },
+                              borderRadius: BorderRadius.circular(16),
+                              child: _buildMetricTile(
+                                title: 'Objectif',
+                                value: _formatObjective(_profile?.profil.objectifPrincipal),
+                                subtitle: 'Orientation (Toucher pour changer)',
+                                icon: Icons.flag_rounded,
+                                color: AppTheme.accentRose,
+                              ),
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -304,6 +395,50 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppTheme.textDark),
                       ),
                       const SizedBox(height: 12),
+
+                      _buildActionCard(
+                        icon: Icons.stars_rounded,
+                        title: 'Abonnement & Offres Premium',
+                        subtitle: 'Découvrez la formule Sérénité, BBT & bilans complets',
+                        color: const Color(0xFF8E24AA),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const SubscriptionScreen()),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 10),
+
+                      if (_profile?.isAdmin == true) ...[
+                        _buildActionCard(
+                          icon: Icons.admin_panel_settings_rounded,
+                          title: 'Centre de Pilotage Super Admin',
+                          subtitle: 'Dashboard, utilisatrices, contenus, finances, RBAC & monitoring',
+                          color: const Color(0xFF141824),
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const SuperAdminShellScreen()),
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 10),
+                      ],
+
+                      _buildActionCard(
+                        icon: Icons.card_giftcard_rounded,
+                        title: 'Parrainage & 30 jours offerts',
+                        subtitle: 'Invitez une proche : 30 jours gratuits pour elle et vous',
+                        color: Colors.amber.shade800,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const ReferralScreen()),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 10),
 
                       _buildActionCard(
                         icon: Icons.tune_rounded,
@@ -360,7 +495,53 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           context.read<AuthBloc>().add(LogoutRequestedEvent());
                         },
                       ),
-                      const SizedBox(height: 90),
+                      const SizedBox(height: 28),
+
+                      // Signature & Logo officiel de l'application
+                      Center(
+                        child: Column(
+                          children: [
+                            Container(
+                              width: 52,
+                              height: 52,
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                shape: BoxShape.circle,
+                                boxShadow: AppTheme.subtleShadow,
+                                border: Border.all(
+                                  color: AppTheme.primary.withValues(alpha: 0.12),
+                                  width: 1.5,
+                                ),
+                              ),
+                              child: ClipOval(
+                                child: Image.asset(
+                                  'assets/images/logo.png',
+                                  fit: BoxFit.contain,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            const Text(
+                              'FertiliteApp v1.0.0',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: AppTheme.textDark,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            const Text(
+                              'Santé Féminine & Fertilité Physiologique',
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                color: AppTheme.textMuted,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 80),
                     ],
                   ),
                 ),
@@ -378,11 +559,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
         return 'Suivi du cycle 📅';
       case 'eviter_grossesse':
       case 'contraception_naturelle':
-        return 'Observation & Prévention 🛡️';
+        return 'Observation 🛡️';
       case 'comprendre_corps':
-        return 'Écoute & Hormones 🌿';
+        return 'Écoute du corps 🌿';
       default:
-        return 'Suivi général';
+        return 'Suivi du cycle';
     }
   }
 
@@ -394,7 +575,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     required Color color,
   }) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
@@ -407,7 +588,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(title, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: AppTheme.textMuted)),
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: AppTheme.textMuted),
+                ),
+              ),
+              const SizedBox(width: 4),
               Container(
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
@@ -419,9 +608,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ],
           ),
           const SizedBox(height: 8),
-          Text(value, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: color)),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: color),
+          ),
           const SizedBox(height: 2),
-          Text(subtitle, style: const TextStyle(fontSize: 10.5, color: AppTheme.textLight)),
+          Text(
+            subtitle,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 10.5, color: AppTheme.textLight),
+          ),
         ],
       ),
     );

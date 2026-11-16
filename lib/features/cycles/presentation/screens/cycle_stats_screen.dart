@@ -16,7 +16,6 @@ import '../../../../core/widgets/modern_app_header.dart';
 import '../../../../core/widgets/natural_wellness_card.dart';
 import '../../../../core/widgets/atmospheric_background.dart';
 import '../../../../core/widgets/glass_card.dart';
-import '../../../../core/widgets/glass_skeleton_loader.dart';
 import '../../../../core/error/error_feedback.dart';
 import '../widgets/cycle_detail_bottom_sheet.dart';
 import '../widgets/medical_summary_bottom_sheet.dart';
@@ -26,6 +25,7 @@ import '../../../observations/presentation/bloc/observation_state.dart';
 import '../../../observations/presentation/widgets/bbt_chart_widget.dart';
 import '../../../observations/presentation/widgets/observation_entry_bottom_sheet.dart';
 import '../../../observations/data/models/observation_models.dart';
+import '../../../subscriptions/presentation/widgets/premium_paywall_card.dart';
 
 class CycleStatsScreen extends StatefulWidget {
   const CycleStatsScreen({super.key});
@@ -80,6 +80,7 @@ class _CycleStatsScreenState extends State<CycleStatsScreen> {
   FullUserProfileModel? _profile;
   String _selectedPeriod = 'all'; // '3m', '6m', '1an', 'all'
   String? _selectedCycleId;
+  CyclesLoadedState? _lastLoadedCycles;
 
   static const _moisFrCourt = [
     '', 'Jan.', 'Fév.', 'Mars', 'Avr.', 'Mai', 'Juin',
@@ -96,7 +97,7 @@ class _CycleStatsScreenState extends State<CycleStatsScreen> {
   }
 
   void _loadBbtAnalysis({CycleModel? cycle}) {
-    if (!mounted) return;
+    if (!mounted || PremiumPaywallHelper.shouldEnforcePaywall(context)) return;
     try {
       final obsBloc = context.read<ObservationBloc>();
       if (cycle != null) {
@@ -151,6 +152,16 @@ class _CycleStatsScreenState extends State<CycleStatsScreen> {
 
   void _openMedicalSummary(CycleStatsModel? stats, List<CycleModel> cycles) {
     HapticFeedback.selectionClick();
+    if (PremiumPaywallHelper.shouldEnforcePaywall(context)) {
+      PremiumPaywallHelper.showPaywallSheet(
+        context,
+        featureTitle: 'Bilan Médical pour consultation',
+        featureDescription:
+            'Générez et partagez un compte-rendu clinique complet de vos cycles, douleurs et durées avec votre gynécologue ou sage-femme.',
+        icon: Icons.medical_services_rounded,
+      );
+      return;
+    }
     MedicalSummaryBottomSheet.show(
       context,
       stats: stats,
@@ -316,6 +327,9 @@ class _CycleStatsScreenState extends State<CycleStatsScreen> {
   Widget build(BuildContext context) {
     return BlocConsumer<CycleBloc, CycleState>(
       listener: (context, state) {
+        if (state is CyclesLoadedState) {
+          _lastLoadedCycles = state;
+        }
         if (state is CycleFailureState) {
           AppFeedback.showError(
             context,
@@ -325,9 +339,13 @@ class _CycleStatsScreenState extends State<CycleStatsScreen> {
         }
       },
       builder: (context, state) {
-        final loaded = state is CyclesLoadedState ? state : null;
-        final stats = loaded?.stats;
-        final allCycles = loaded?.cycles ?? [];
+        if (state is CyclesLoadedState) {
+          _lastLoadedCycles = state;
+        }
+
+        final effectiveState = state is CyclesLoadedState ? state : _lastLoadedCycles;
+        final stats = effectiveState?.stats;
+        final allCycles = effectiveState?.cycles ?? [];
 
         return Scaffold(
           backgroundColor: AppTheme.background,
@@ -346,7 +364,7 @@ class _CycleStatsScreenState extends State<CycleStatsScreen> {
           ),
           body: AtmosphericBackground(
             imagePath: 'assets/images/woman_stats_empowerment.jpg',
-            child: _buildBody(context, state, stats, allCycles),
+            child: _buildBody(context, state, stats, allCycles, effectiveState),
           ),
         );
       },
@@ -358,12 +376,11 @@ class _CycleStatsScreenState extends State<CycleStatsScreen> {
     CycleState state,
     CycleStatsModel? stats,
     List<CycleModel> allCycles,
+    CyclesLoadedState? effectiveState,
   ) {
-    if (state is CycleLoadingState) {
-      return const StatsSkeletonView();
-    }
+    // Les statistiques restent affichées en permanence : aucune coupure par skeleton ou loader
 
-    if (state is CycleFailureState) {
+    if (state is CycleFailureState && effectiveState == null) {
       final isOffline = _isOffline(context) ||
           state.message.toLowerCase().contains('connexion') ||
           state.message.toLowerCase().contains('hors ligne') ||
@@ -410,6 +427,8 @@ class _CycleStatsScreenState extends State<CycleStatsScreen> {
     }
 
     // Calcul dynamique selon le filtre temporel
+    final isRestricted = PremiumPaywallHelper.shouldEnforcePaywall(context);
+    final hasFullAccess = !isRestricted;
     final filteredData = _calculateFilteredStats(stats, allCycles);
     final painMetrics = _calculatePainAndFlow(filteredData.filteredCycles);
 
@@ -448,9 +467,11 @@ class _CycleStatsScreenState extends State<CycleStatsScreen> {
             ),
             const SizedBox(height: 18),
 
-            // 1. Sélecteur de période temporelle
-            _buildPeriodFilterChips(),
-            const SizedBox(height: 18),
+            // 1. Sélecteur de période temporelle (Premium pour >3 mois)
+            if (hasFullAccess) ...[
+              _buildPeriodFilterChips(),
+              const SizedBox(height: 18),
+            ],
 
             // 2. Hero Card : Jauge Visuelle de Régularité Biométrique
             _buildHeroRegularityCard(stats, filteredData),
@@ -460,28 +481,38 @@ class _CycleStatsScreenState extends State<CycleStatsScreen> {
             _buildMetricsGrid(filteredData),
             const SizedBox(height: 20),
 
-            // 4. Histogramme interactif double-teinte (Stacked Bar Chart)
-            _buildCycleLengthBarChart(filteredData, allCycles),
-            const SizedBox(height: 20),
+            if (hasFullAccess) ...[
+              // 4. Histogramme interactif double-teinte (Stacked Bar Chart)
+              _buildCycleLengthBarChart(filteredData, allCycles),
+              const SizedBox(height: 20),
 
-            // 5. Courbe biphasique de température basale (UC-16 DataViz BBT)
-            _buildBbtAnalysisSection(allCycles),
-            const SizedBox(height: 20),
+              // 5. Courbe biphasique de température basale (UC-16 DataViz BBT)
+              _buildBbtAnalysisSection(allCycles),
+              const SizedBox(height: 20),
 
-            // 6. Bilan des Douleurs Menstruelles & Intensités de Flux
-            _buildPainAndFlowCard(painMetrics),
-            const SizedBox(height: 20),
+              // 6. Bilan des Douleurs Menstruelles & Intensités de Flux
+              _buildPainAndFlowCard(painMetrics),
+              const SizedBox(height: 20),
 
-            // 6. Découpage moyen des 4 phases physiologiques du cycle
-            _buildPhasesBreakdownCard(filteredData),
-            const SizedBox(height: 20),
+              // 6. Découpage moyen des 4 phases physiologiques du cycle
+              _buildPhasesBreakdownCard(filteredData),
+              const SizedBox(height: 20),
 
-            // 7. Bannière dynamique selon l'Objectif de l'utilisatrice
-            _buildObjectiveInsightCard(filteredData),
-            const SizedBox(height: 20),
+              // 7. Bannière dynamique selon l'Objectif de l'utilisatrice
+              _buildObjectiveInsightCard(filteredData),
+              const SizedBox(height: 20),
+            ] else ...[
+              const PremiumPaywallCard(
+                title: 'Statistiques avancées & Courbe BBT',
+                description:
+                    'Débloquez l\'analyse biphasique de votre température basale (BBT), l\'histogramme comparatif multi-cycles, le bilan des douleurs et le détail de vos 4 phases hormonales.',
+                icon: Icons.auto_graph_rounded,
+              ),
+              const SizedBox(height: 20),
+            ],
 
             // 8. Carte d'invitation au Bilan Médical
-            _buildDoctorExportCard(stats, allCycles),
+            _buildDoctorExportCard(stats, allCycles, isPremium: hasFullAccess),
             const SizedBox(height: 20),
 
             // 9. Note médicale & explications pédagogiques
@@ -752,7 +783,7 @@ class _CycleStatsScreenState extends State<CycleStatsScreen> {
           ],
         ),
         const SizedBox(height: 14),
-        Row(
+        Row(  
           children: [
             Expanded(
               child: _buildMetricTile(
@@ -1154,43 +1185,11 @@ class _CycleStatsScreenState extends State<CycleStatsScreen> {
           curr is ObservationFailureState,
       builder: (context, obsState) {
         BbtAnalysisModel? analysis;
-        bool isLoading = false;
 
         if (obsState is BbtAnalysisLoadedState) {
           analysis = obsState.analysis;
         } else {
           analysis = context.read<ObservationBloc>().cachedBbtAnalysis;
-          if (obsState is ObservationLoadingState && analysis == null) {
-            isLoading = true;
-          }
-        }
-
-        if (isLoading) {
-          return GlassCard(
-            padding: const EdgeInsets.all(20),
-            borderRadius: 24,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const ShimmerBone(width: 42, height: 42, borderRadius: 14, opacity: 0.6),
-                    const SizedBox(width: 12),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
-                        ShimmerBone(width: 140, height: 16, borderRadius: 6, opacity: 0.6),
-                        SizedBox(height: 6),
-                        ShimmerBone(width: 190, height: 12, borderRadius: 6, opacity: 0.4),
-                      ],
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                const ShimmerBone(width: double.infinity, height: 180, borderRadius: 16, opacity: 0.5),
-              ],
-            ),
-          );
         }
 
         final bbtAnalysis = analysis ??
@@ -1760,7 +1759,11 @@ class _CycleStatsScreenState extends State<CycleStatsScreen> {
   }
 
   // 8. Carte d'invitation au Bilan Médical
-  Widget _buildDoctorExportCard(CycleStatsModel? stats, List<CycleModel> allCycles) {
+  Widget _buildDoctorExportCard(
+    CycleStatsModel? stats,
+    List<CycleModel> allCycles, {
+    bool isPremium = false,
+  }) {
     return GlassCard(
       padding: const EdgeInsets.all(18),
       borderRadius: 22,
@@ -1779,9 +1782,27 @@ class _CycleStatsScreenState extends State<CycleStatsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Bilan pour consultation médicale',
-                  style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold, color: AppTheme.textDark),
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Bilan pour consultation médicale',
+                        style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold, color: AppTheme.textDark),
+                      ),
+                    ),
+                    if (!isPremium)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primary.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text(
+                          'PREMIUM ⭐',
+                          style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w800, color: AppTheme.primary),
+                        ),
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 3),
                 const Text(
@@ -1792,12 +1813,29 @@ class _CycleStatsScreenState extends State<CycleStatsScreen> {
                 InkWell(
                   onTap: () => _openMedicalSummary(stats, allCycles),
                   borderRadius: BorderRadius.circular(8),
-                  child: const Row(
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text('Ouvrir mon bilan', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.teal)),
-                      SizedBox(width: 3),
-                      Icon(Icons.arrow_forward_rounded, size: 14, color: Colors.teal),
+                      Icon(
+                        isPremium ? Icons.description_outlined : Icons.lock_outline_rounded,
+                        size: 14,
+                        color: isPremium ? Colors.teal : AppTheme.primary,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        isPremium ? 'Ouvrir mon bilan' : 'Débloquer le bilan médical',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: isPremium ? Colors.teal : AppTheme.primary,
+                        ),
+                      ),
+                      const SizedBox(width: 3),
+                      Icon(
+                        Icons.arrow_forward_rounded,
+                        size: 14,
+                        color: isPremium ? Colors.teal : AppTheme.primary,
+                      ),
                     ],
                   ),
                 ),

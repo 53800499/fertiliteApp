@@ -116,6 +116,7 @@ class RegisterRequestModel {
   final String birthDate; // YYYY-MM-DD
   final String? preferredLanguage;
   final String? timezone;
+  final String? referralCode;
   final List<ConsentItemModel> consents;
 
   const RegisterRequestModel({
@@ -124,6 +125,7 @@ class RegisterRequestModel {
     required this.birthDate,
     this.preferredLanguage = 'fr',
     this.timezone = 'Africa/Porto-Novo',
+    this.referralCode,
     required this.consents,
   });
 
@@ -133,6 +135,8 @@ class RegisterRequestModel {
         'birthDate': birthDate,
         if (preferredLanguage != null) 'preferredLanguage': preferredLanguage,
         if (timezone != null) 'timezone': timezone,
+        if (referralCode != null && referralCode!.trim().isNotEmpty)
+          'referralCode': referralCode!.trim().toUpperCase(),
         'consents': consents.map((c) => c.toJson()).toList(),
       };
 }

@@ -17,6 +17,20 @@ class AppTheme {
   static const Color fertileHighColor = Color(0xFFAB47BC);
   static const Color fertileLowColor = Color(0xFF80CBC4);
 
+  // Couleurs adaptées aux objectifs pour le calendrier
+  static const Color ovulationGolden = Color(0xFFFFB300); // Or solaire - ovulation & fertilité maximale
+  static const Color ovulationGoldenDark = Color(0xFFB78103);
+  static const Color fertilePink = Color(0xFFF06292); // Rose corail - fenêtre fertile
+  static const Color fertilePinkLight = Color(0xFFFCE4EC);
+  static const Color cautionOrange = Color(0xFFFF7043); // Orange ambré - zone de précaution (contraception naturelle)
+  static const Color cautionOrangeDark = Color(0xFFD84315);
+  static const Color safeGreen = Color(0xFF43A047); // Vert sécurisé - période infertile
+  static const Color safeGreenLight = Color(0xFFE8F5E9);
+  static const Color follicularTeal = Color(0xFF00897B); // Turquoise - phase folliculaire
+  static const Color follicularTealLight = Color(0xFFE0F2F1);
+  static const Color lutealLavender = Color(0xFF7E57C2); // Lavande - phase lutéale
+  static const Color lutealLavenderLight = Color(0xFFEDE7F6);
+
   // Fonds & Neutres
   static const Color background = Color(0xFFFAF7F9);
   static const Color surface = Colors.white;
@@ -66,6 +80,14 @@ class AppTheme {
           color: const Color(0xFF8E24AA).withValues(alpha: 0.25),
           blurRadius: 20,
           offset: const Offset(0, 8),
+        ),
+      ];
+
+  static List<BoxShadow> get subtleShadow => [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: 0.04),
+          blurRadius: 10,
+          offset: const Offset(0, 3),
         ),
       ];
 

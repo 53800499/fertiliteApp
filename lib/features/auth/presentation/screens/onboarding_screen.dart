@@ -20,6 +20,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       'subtitle':
           'Un suivi menstruel physiologique et intuitif, conçu pour respecter votre rythme biologique unique.',
       'badge': '100% Respectueux du corps',
+      'image': 'assets/images/woman_wellness_natural.jpg',
       'icon': Icons.favorite_rounded,
       'gradient': const [Color(0xFF8E24AA), Color(0xFFF06292)],
       'quote': '« Estimer, expliquer et informer — jamais garantir. »',
@@ -29,6 +30,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       'subtitle':
           'Anticipez votre fenêtre fertile et ovulation grâce à un moteur probabiliste clair, sans fausses certitudes.',
       'badge': 'Algorithme Transparent & Explicable',
+      'image': 'assets/images/woman_stats_empowerment.jpg',
       'icon': Icons.auto_awesome_rounded,
       'gradient': const [Color(0xFF7B1FA2), Color(0xFFFF7043)],
       'quote': 'Des explications détaillées pour chaque estimation.',
@@ -38,6 +40,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       'subtitle':
           'Vos données de santé restent strictement les vôtres. Chiffrement local renforcé et zéro pistage commercial.',
       'badge': 'Conforme RGPD & Zéro Revente',
+      'image': 'assets/images/woman_serenity_journal.jpg',
       'icon': Icons.security_rounded,
       'gradient': const [Color(0xFF00897B), Color(0xFF8E24AA)],
       'quote': 'Stockage sécurisé sur votre appareil et en base isolée.',
@@ -60,12 +63,25 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.all(7),
+                        width: 34,
+                        height: 34,
+                        padding: const EdgeInsets.all(3),
                         decoration: BoxDecoration(
-                          gradient: AppTheme.primaryGradient,
-                          borderRadius: BorderRadius.circular(10),
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(9),
+                          boxShadow: AppTheme.subtleShadow,
+                          border: Border.all(
+                            color: AppTheme.primary.withValues(alpha: 0.15),
+                            width: 1.5,
+                          ),
                         ),
-                        child: const Icon(Icons.spa_rounded, color: Colors.white, size: 18),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(6),
+                          child: Image.asset(
+                            'assets/images/logo.png',
+                            fit: BoxFit.contain,
+                          ),
+                        ),
                       ),
                       const SizedBox(width: 10),
                       const Text(
@@ -103,54 +119,73 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   final slide = _slides[index];
                   final List<Color> colors = slide['gradient'] as List<Color>;
 
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
+                  return SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        // Illustration avec double halo
+                        // Illustration avec image naturelle et double halo
                         Stack(
                           alignment: Alignment.center,
                           children: [
                             Container(
-                              width: 150,
-                              height: 150,
+                              width: 220,
+                              height: 220,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                color: colors[0].withValues(alpha: 0.12),
+                                color: colors[0].withValues(alpha: 0.08),
                               ),
                             ),
                             Container(
-                              width: 120,
-                              height: 120,
+                              width: 190,
+                              height: 190,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                color: colors[0].withValues(alpha: 0.2),
+                                color: colors[0].withValues(alpha: 0.15),
                               ),
                             ),
                             Container(
-                              width: 90,
-                              height: 90,
+                              width: 165,
+                              height: 165,
                               decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                gradient: LinearGradient(
-                                  colors: colors,
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
+                                borderRadius: BorderRadius.circular(30),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: colors[0].withValues(alpha: 0.35),
-                                    blurRadius: 20,
+                                    color: colors[0].withValues(alpha: 0.25),
+                                    blurRadius: 22,
                                     offset: const Offset(0, 8),
                                   ),
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.06),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
+                                  ),
                                 ],
+                                border: Border.all(
+                                  color: Colors.white,
+                                  width: 3.5,
+                                ),
                               ),
-                              child: Icon(slide['icon'] as IconData, size: 44, color: Colors.white),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(26),
+                                child: Image.asset(
+                                  slide['image'] as String,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) => Container(
+                                    color: AppTheme.primaryLight,
+                                    child: Icon(
+                                      slide['icon'] as IconData? ?? Icons.spa_rounded,
+                                      size: 48,
+                                      color: colors[0],
+                                    ),
+                                  ),
+                                ),
+                              ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 28),
+                        const SizedBox(height: 24),
 
                         // Badge de confiance
                         Container(

@@ -93,17 +93,27 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // En-tête avec logo doux
+                      // En-tête avec logo officiel
                       Center(
                         child: Container(
-                          width: 76,
-                          height: 76,
+                          width: 88,
+                          height: 88,
+                          padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            gradient: AppTheme.primaryGradient,
+                            color: Colors.white,
                             shape: BoxShape.circle,
                             boxShadow: AppTheme.floatingShadow,
+                            border: Border.all(
+                              color: AppTheme.primary.withValues(alpha: 0.15),
+                              width: 2,
+                            ),
                           ),
-                          child: const Icon(Icons.spa_rounded, color: Colors.white, size: 38),
+                          child: ClipOval(
+                            child: Image.asset(
+                              'assets/images/logo.png',
+                              fit: BoxFit.contain,
+                            ),
+                          ),
                         ),
                       ),
                       const SizedBox(height: 20),

@@ -95,6 +95,7 @@ class UserPrivacySettingsModel {
 class FullUserProfileModel {
   final String id;
   final String email;
+  final String role;
   final String? dateNaissance;
   final String languePreferee;
   final String fuseauHoraire;
@@ -104,12 +105,15 @@ class FullUserProfileModel {
   const FullUserProfileModel({
     required this.id,
     required this.email,
+    this.role = 'utilisatrice',
     this.dateNaissance,
     this.languePreferee = 'fr',
     this.fuseauHoraire = 'Africa/Porto-Novo',
     required this.profil,
     required this.parametresConfidentialite,
   });
+
+  bool get isAdmin => role == 'super_admin' || role == 'admin';
 
   factory FullUserProfileModel.fromJson(Map<String, dynamic> json) {
     // Si la réponse contient la clé 'profil' imbriquée
@@ -125,6 +129,7 @@ class FullUserProfileModel {
     return FullUserProfileModel(
       id: json['id'] as String? ?? json['utilisateurId'] as String? ?? '',
       email: json['email'] as String? ?? '',
+      role: json['role'] as String? ?? 'utilisatrice',
       dateNaissance: json['dateNaissance'] as String?,
       languePreferee: json['languePreferee'] as String? ?? 'fr',
       fuseauHoraire: json['fuseauHoraire'] as String? ?? 'Africa/Porto-Novo',
@@ -138,6 +143,7 @@ class FullUserProfileModel {
   Map<String, dynamic> toJson() => {
         'id': id,
         'email': email,
+        'role': role,
         if (dateNaissance != null) 'dateNaissance': dateNaissance,
         'languePreferee': languePreferee,
         'fuseauHoraire': fuseauHoraire,

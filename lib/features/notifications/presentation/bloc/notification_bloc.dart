@@ -1,14 +1,24 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../../../core/security/secure_storage_helper.dart';
 import '../../data/datasources/notification_remote_data_source.dart';
 import '../../data/models/notification_model.dart';
+import '../../services/local_notification_service.dart';
 import 'notification_event.dart';
 import 'notification_state.dart';
 
 class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
   final INotificationRemoteDataSource remoteDataSource;
+  final SecureStorageHelper storage;
+  final LocalNotificationService localNotificationService;
 
-  NotificationBloc({required this.remoteDataSource})
-      : super(NotificationInitialState()) {
+  NotificationBloc({
+    required this.remoteDataSource,
+    SecureStorageHelper? storage,
+    LocalNotificationService? localNotificationService,
+  })  : storage = storage ?? SecureStorageHelper(),
+        localNotificationService =
+            localNotificationService ?? LocalNotificationService.instance,
+        super(NotificationInitialState()) {
     on<LoadNotificationsEvent>(_onLoadNotifications);
     on<LoadPreferencesEvent>(_onLoadPreferences);
     on<UpdatePreferencesEvent>(_onUpdatePreferences);
@@ -34,6 +44,14 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
       final unreadCount = (notifsData['unreadCount'] as int?) ??
           items.where((n) => !n.isRead).length;
 
+      // Synchronisation des rappels planifiés & affichage des nouvelles notifications non lues
+      await localNotificationService.syncScheduledReminders(prefs);
+      await localNotificationService.displayNewUnreadNotifications(
+        items: items,
+        prefs: prefs,
+        storage: storage,
+      );
+
       emit(NotificationLoadedState(
         notifications: items,
         unreadCount: unreadCount,
@@ -54,6 +72,7 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
   ) async {
     try {
       final prefs = await remoteDataSource.getPreferences();
+      await localNotificationService.syncScheduledReminders(prefs);
       if (state is NotificationLoadedState) {
         final current = state as NotificationLoadedState;
         emit(current.copyWith(preferences: prefs));
@@ -88,6 +107,7 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
 
       try {
         final updated = await remoteDataSource.updatePreferences(event.preferences);
+        await localNotificationService.syncScheduledReminders(updated);
         emit(current.copyWith(
           preferences: updated,
           isSavingPreferences: false,
@@ -180,11 +200,13 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
       final current = state as NotificationLoadedState;
       try {
         final newNotif = await remoteDataSource.sendTestNotification();
+        await localNotificationService.showNotificationFromItem(newNotif);
+        await storage.markNotificationIdsDisplayed([newNotif.id]);
         final updatedList = [newNotif, ...current.notifications];
         emit(current.copyWith(
           notifications: updatedList,
           unreadCount: current.unreadCount + 1,
-          feedbackMessage: 'Alerte test envoyée avec succès',
+          feedbackMessage: 'Alerte test envoyée sur votre appareil',
         ));
       } catch (e) {
         emit(current.copyWith(

@@ -11,6 +11,7 @@ import 'features/cycles/presentation/bloc/cycle_bloc.dart';
 import 'features/observations/presentation/bloc/observation_bloc.dart';
 import 'features/fertility/presentation/bloc/fertility_bloc.dart';
 import 'features/notifications/presentation/bloc/notification_bloc.dart';
+import 'features/subscriptions/presentation/bloc/subscription_bloc.dart';
 import 'core/network/network_cubit.dart';
 
 void main() async {
@@ -35,9 +36,11 @@ class FertiliteApp extends StatelessWidget {
         BlocProvider<ObservationBloc>.value(value: ServiceLocator.observationBloc),
         BlocProvider<FertilityBloc>.value(value: ServiceLocator.fertilityBloc),
         BlocProvider<NotificationBloc>.value(value: ServiceLocator.notificationBloc),
+        BlocProvider<SubscriptionBloc>.value(value: ServiceLocator.subscriptionBloc),
         BlocProvider<NetworkCubit>.value(value: ServiceLocator.networkCubit),
       ],
       child: MaterialApp(
+        navigatorKey: ServiceLocator.navigatorKey,
         title: 'FertiliteApp',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
@@ -67,17 +70,22 @@ class AuthWrapper extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Container(
-                  width: 76,
-                  height: 76,
+                  width: 88,
+                  height: 88,
+                  padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: AppTheme.primaryLight.withValues(alpha: 0.35),
+                    color: Colors.white,
                     shape: BoxShape.circle,
+                    boxShadow: AppTheme.floatingShadow,
+                    border: Border.all(
+                      color: AppTheme.primary.withValues(alpha: 0.15),
+                      width: 2,
+                    ),
                   ),
-                  child: const Center(
-                    child: Icon(
-                      Icons.spa_rounded,
-                      size: 40,
-                      color: AppTheme.primary,
+                  child: ClipOval(
+                    child: Image.asset(
+                      'assets/images/logo.png',
+                      fit: BoxFit.contain,
                     ),
                   ),
                 ),

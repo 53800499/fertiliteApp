@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import '../network/network_cubit.dart';
 import '../network/api_client.dart';
 import '../security/secure_storage_helper.dart';
@@ -30,8 +31,15 @@ import '../../features/auth/data/models/auth_models.dart';
 import '../../features/fertility/presentation/bloc/fertility_bloc.dart';
 import '../../features/notifications/data/datasources/notification_remote_data_source.dart';
 import '../../features/notifications/presentation/bloc/notification_bloc.dart';
+import '../../features/notifications/presentation/screens/notification_inbox_screen.dart';
+import '../../features/notifications/services/local_notification_service.dart';
+import '../../features/subscriptions/data/datasources/subscription_remote_data_source.dart';
+import '../../features/subscriptions/data/repositories/subscription_repository_impl.dart';
+import '../../features/subscriptions/domain/repositories/subscription_repository.dart';
+import '../../features/subscriptions/presentation/bloc/subscription_bloc.dart';
 
 class ServiceLocator {
+  static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
   static late final SecureStorageHelper storage;
   static late final ApiClient apiClient;
   static late final NetworkCubit networkCubit;
@@ -68,6 +76,11 @@ class ServiceLocator {
   // Notifications (Module 6 - UC-20, UC-21, UC-22)
   static late final INotificationRemoteDataSource notificationRemoteDataSource;
   static late final NotificationBloc notificationBloc;
+
+  // Abonnements & Parrainage (Module 9)
+  static late final ISubscriptionRemoteDataSource subscriptionRemoteDataSource;
+  static late final ISubscriptionRepository subscriptionRepository;
+  static late final SubscriptionBloc subscriptionBloc;
 
   static Future<void> init({String? baseUrl, void Function()? onSessionExpired}) async {
     storage = SecureStorageHelper();
@@ -164,12 +177,13 @@ class ServiceLocator {
       }
     });
 
-    // Fertility (Module 4)
+    // Fertility (Module 4 avec cache hors-ligne)
     fertilityRemoteDataSource = FertilityRemoteDataSourceImpl(
       dio: apiClient.dio,
     );
     fertilityRepository = FertilityRepositoryImpl(
       remoteDataSource: fertilityRemoteDataSource,
+      storage: storage,
     );
     fertilityBloc = FertilityBloc(fertilityRepository: fertilityRepository);
 
@@ -179,6 +193,37 @@ class ServiceLocator {
     );
     notificationBloc = NotificationBloc(
       remoteDataSource: notificationRemoteDataSource,
+      storage: storage,
+      localNotificationService: LocalNotificationService.instance,
+    );
+
+    // Initialisation des notifications locales + tâche périodique en arrière-plan
+    try {
+      await LocalNotificationService.instance.init(
+        requestPermissions: true,
+        onNotificationTap: (_) => openNotificationInbox(),
+      );
+      await LocalNotificationService.instance.registerBackgroundSync();
+    } catch (_) {}
+
+    // Abonnements & Parrainage (Module 9)
+    subscriptionRemoteDataSource = SubscriptionRemoteDataSourceImpl(
+      dio: apiClient.dio,
+    );
+    subscriptionRepository = SubscriptionRepositoryImpl(
+      remoteDataSource: subscriptionRemoteDataSource,
+    );
+    subscriptionBloc = SubscriptionBloc(
+      subscriptionRepository: subscriptionRepository,
+    );
+  }
+
+  /// Ouvre la boîte de réception des alertes (ex. au clic sur une notification système).
+  static void openNotificationInbox() {
+    final nav = navigatorKey.currentState;
+    if (nav == null) return;
+    nav.push(
+      MaterialPageRoute(builder: (_) => const NotificationInboxScreen()),
     );
   }
 }

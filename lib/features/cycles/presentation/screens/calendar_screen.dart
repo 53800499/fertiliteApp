@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -6,6 +7,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/di/service_locator.dart';
 import '../../../users/data/models/user_profile_model.dart';
 import '../../../users/presentation/screens/profile_setup_screen.dart';
+import '../../../users/presentation/widgets/user_objective_banner.dart';
 import '../../data/models/cycle_models.dart';
 import '../bloc/cycle_bloc.dart';
 import '../bloc/cycle_event.dart';
@@ -18,18 +20,25 @@ import '../../../observations/presentation/bloc/observation_state.dart';
 import '../../../observations/presentation/widgets/day_observations_card.dart';
 import '../../../observations/presentation/widgets/observation_entry_bottom_sheet.dart';
 import '../../../fertility/presentation/bloc/fertility_bloc.dart';
+import '../../../fertility/data/models/fertility_models.dart';
 import '../../../fertility/presentation/widgets/fertility_explanation_bottom_sheet.dart';
 import '../../../../core/network/network_cubit.dart';
+import '../../../../core/network/network_state.dart';
 import '../../../../core/widgets/offline_state_view.dart';
 import '../../../../core/widgets/modern_app_header.dart';
 import '../../../../core/widgets/natural_wellness_card.dart';
 import '../../../../core/widgets/atmospheric_background.dart';
 import '../../../../core/widgets/glass_card.dart';
-import '../../../../core/widgets/glass_skeleton_loader.dart';
 import '../../../../core/error/error_feedback.dart';
 import '../../../notifications/presentation/bloc/notification_bloc.dart';
+import '../../../notifications/presentation/bloc/notification_event.dart';
 import '../../../notifications/presentation/bloc/notification_state.dart';
 import '../../../notifications/presentation/screens/notification_inbox_screen.dart';
+import '../../../subscriptions/presentation/bloc/subscription_bloc.dart';
+import '../../../subscriptions/presentation/bloc/subscription_event.dart';
+import '../../../subscriptions/presentation/bloc/subscription_state.dart';
+import '../../../subscriptions/presentation/screens/subscription_screen.dart';
+import '../../../subscriptions/presentation/widgets/premium_paywall_card.dart';
 
 class CalendarScreen extends StatefulWidget {
   const CalendarScreen({super.key});
@@ -43,10 +52,136 @@ class _CalendarScreenState extends State<CalendarScreen> {
   DateTime _selectedDate = DateTime.now();
   final Map<String, JourReglesModel> _localSavedJours = {};
   FullUserProfileModel? _userProfile;
+  StreamSubscription<FullUserProfileModel>? _profileSub;
+  CyclesLoadedState? _lastLoadedCycles;
+  PredictionModel? _lastPrediction;
+  CalendarMonthModel? _lastMonthCalendar;
+  bool _hideSubscriptionBanner = false;
+
+  /// Bannière incitant les utilisatrices en mode gratuit à activer Premium.
+  Widget _buildSubscriptionRecommendationBanner() {
+    if (_hideSubscriptionBanner) return const SizedBox.shrink();
+    return BlocBuilder<SubscriptionBloc, SubscriptionState>(
+      builder: (context, subState) {
+        if (subState is! SubscriptionLoadedState || subState.subscription.isPremium) {
+          return const SizedBox.shrink();
+        }
+        final message = PremiumPaywallHelper.recommendationMessage(context);
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 18),
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  AppTheme.primaryLight,
+                  AppTheme.accentRoseLight.withValues(alpha: 0.7),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: AppTheme.primary.withValues(alpha: 0.25)),
+              boxShadow: AppTheme.subtleShadow,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primary.withValues(alpha: 0.14),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.workspace_premium_rounded,
+                        color: AppTheme.primary,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Recommandation : Passez à Premium',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 13.5,
+                              color: AppTheme.textDark,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            message,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              height: 1.35,
+                              color: AppTheme.textMuted,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      icon: const Icon(Icons.close_rounded, size: 18, color: AppTheme.textMuted),
+                      tooltip: 'Masquer pour cette session',
+                      onPressed: () => setState(() => _hideSubscriptionBanner = true),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const SubscriptionScreen()),
+                      );
+                    },
+                    icon: const Icon(Icons.auto_awesome_rounded, size: 16),
+                    label: const Text(
+                      'Activer Premium (1 000 FCFA/mois)',
+                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.primary,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
 
   @override
   void initState() {
     super.initState();
+    // 1. Initialisation instantanée synchrone depuis le profil en mémoire
+    _userProfile = ServiceLocator.userRepository.currentProfile;
+
+    // 2. Écoute réactive de tout changement d'objectif intervenant dans l'application
+    _profileSub = ServiceLocator.userRepository.profileStream.listen((updated) {
+      if (mounted) {
+        setState(() => _userProfile = updated);
+      }
+    });
+
     _loadUserProfile();
     context.read<CycleBloc>().add(LoadCyclesEvent());
     context.read<FertilityBloc>().add(const LoadCurrentFertilityEvent());
@@ -58,11 +193,50 @@ class _CalendarScreenState extends State<CalendarScreen> {
     context.read<ObservationBloc>().add(LoadDayObservationsEvent(dateStr));
   }
 
+  @override
+  void dispose() {
+    _profileSub?.cancel();
+    super.dispose();
+  }
+
   Future<void> _loadUserProfile() async {
+    // 1. Chargement instantané depuis le cache local (mode hors-ligne & démarrage à froid)
+    if (_userProfile == null) {
+      final cached = await ServiceLocator.userRepository.getCachedProfile();
+      if (cached != null && mounted) {
+        setState(() => _userProfile = cached);
+      }
+    }
+    // 2. Synchronisation silencieuse depuis le serveur
     try {
       final p = await ServiceLocator.userRepository.getProfile();
       if (mounted) setState(() => _userProfile = p);
     } catch (_) {}
+  }
+
+  Future<void> _handleObjectiveChanged(String newObjective) async {
+    await ServiceLocator.userRepository.updateProfile(
+      UpdateProfileRequestModel(objectifPrincipal: newObjective),
+    );
+    if (mounted) {
+      context.read<FertilityBloc>().add(const RecalculateFertilityEvent());
+    }
+  }
+
+  void _handleSilentReconnectionSync() {
+    _loadUserProfile();
+    context.read<CycleBloc>().add(LoadCyclesEvent());
+    context.read<FertilityBloc>().add(const LoadCurrentFertilityEvent());
+    context.read<FertilityBloc>().add(LoadMonthCalendarEvent(
+          year: _currentMonth.year,
+          month: _currentMonth.month,
+        ));
+    final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
+    context.read<ObservationBloc>().add(LoadDayObservationsEvent(dateStr));
+    context.read<ObservationBloc>().add(const SyncPendingObservationsEvent(isAutomatic: true));
+    ServiceLocator.notificationBloc.add(const LoadNotificationsEvent(silent: true));
+    ServiceLocator.notificationBloc.add(EvaluateRemindersEvent());
+    ServiceLocator.subscriptionBloc.add(const LoadSubscriptionEvent(silent: true));
   }
 
   void _previousMonth() {
@@ -113,10 +287,45 @@ class _CalendarScreenState extends State<CalendarScreen> {
       backgroundColor: AppTheme.background,
       appBar: ModernAppHeader(
         transparent: true,
+        leading: Container(
+          width: 38,
+          height: 38,
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            shape: BoxShape.circle,
+            boxShadow: AppTheme.subtleShadow,
+            border: Border.all(
+              color: AppTheme.primary.withValues(alpha: 0.15),
+              width: 1.5,
+            ),
+          ),
+          child: ClipOval(
+            child: Image.asset(
+              'assets/images/logo.png',
+              fit: BoxFit.contain,
+            ),
+          ),
+        ),
         subtitle: "Aujourd'hui",
         title: 'Calendrier & Fertilité',
         onRefresh: _handleRefresh,
         actions: [
+          IconButton(
+            icon: const Icon(
+              Icons.card_giftcard_rounded,
+              color: AppTheme.primary,
+              size: 22,
+            ),
+            tooltip: 'Abonnement & Parrainage',
+            onPressed: () {
+              HapticFeedback.lightImpact();
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SubscriptionScreen()),
+              );
+            },
+          ),
           BlocBuilder<NotificationBloc, NotificationState>(
             builder: (context, notifState) {
               final unreadCount = notifState is NotificationLoadedState
@@ -180,8 +389,17 @@ class _CalendarScreenState extends State<CalendarScreen> {
       ),
       body: AtmosphericBackground(
         imagePath: 'assets/images/woman_wellness_natural.jpg',
-        child: BlocConsumer<CycleBloc, CycleState>(
+        child: BlocListener<NetworkCubit, NetworkState>(
+          listenWhen: (prev, curr) => curr.isOnline && (!prev.isOnline || curr.wasOffline),
+          listener: (context, netState) {
+            // Synchronisation silencieuse dès la reconnexion au serveur
+            _handleSilentReconnectionSync();
+          },
+          child: BlocConsumer<CycleBloc, CycleState>(
           listener: (context, state) {
+            if (state is CyclesLoadedState) {
+              _lastLoadedCycles = state;
+            }
             if (state is CycleFailureState) {
               AppFeedback.showError(
                 context,
@@ -191,18 +409,42 @@ class _CalendarScreenState extends State<CalendarScreen> {
             }
           },
           builder: (context, state) {
-            if (state is CycleLoadingState) {
-              return const CalendarSkeletonView();
+            if (state is CyclesLoadedState) {
+              _lastLoadedCycles = state;
             }
 
-          if (state is CycleFailureState) {
-            final isOffline = _isOffline(context) ||
-                state.message.toLowerCase().contains('connexion') ||
-                state.message.toLowerCase().contains('hors ligne') ||
-                state.message.toLowerCase().contains('socketexception') ||
-                state.message.toLowerCase().contains('failed host lookup');
+            final loadedState = state is CyclesLoadedState ? state : _lastLoadedCycles;
+            final activeCycle = loadedState?.activeCycle;
+            final currentDay = activeCycle?.currentCycleDay ?? 1;
 
-            if (isOffline) {
+            // Détection du jour de règles pour la date sélectionnée
+            final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
+            final selectedJour = _localSavedJours[dateStr] ?? loadedState?.getJourReglesForDate(_selectedDate);
+
+            // En cas d'erreur réseau seulement si aucune donnée n'est disponible en mémoire/cache
+            if (state is CycleFailureState && loadedState == null) {
+              final isOffline = _isOffline(context) ||
+                  state.message.toLowerCase().contains('connexion') ||
+                  state.message.toLowerCase().contains('hors ligne') ||
+                  state.message.toLowerCase().contains('socketexception') ||
+                  state.message.toLowerCase().contains('failed host lookup');
+
+              if (isOffline) {
+                return RefreshIndicator(
+                  color: AppTheme.primary,
+                  backgroundColor: Colors.white,
+                  onRefresh: _handleRefresh,
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(
+                      parent: BouncingScrollPhysics(),
+                    ),
+                    child: OfflineStateView(
+                      onRetry: _handleRefresh,
+                    ),
+                  ),
+                );
+              }
+
               return RefreshIndicator(
                 color: AppTheme.primary,
                 backgroundColor: Colors.white,
@@ -211,36 +453,13 @@ class _CalendarScreenState extends State<CalendarScreen> {
                   physics: const AlwaysScrollableScrollPhysics(
                     parent: BouncingScrollPhysics(),
                   ),
-                  child: OfflineStateView(
+                  child: AppErrorEmptyView(
+                    error: state.message,
                     onRetry: _handleRefresh,
                   ),
                 ),
               );
             }
-
-            return RefreshIndicator(
-              color: AppTheme.primary,
-              backgroundColor: Colors.white,
-              onRefresh: _handleRefresh,
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(
-                  parent: BouncingScrollPhysics(),
-                ),
-                child: AppErrorEmptyView(
-                  error: state.message,
-                  onRetry: _handleRefresh,
-                ),
-              ),
-            );
-          }
-
-          final loadedState = state is CyclesLoadedState ? state : null;
-          final activeCycle = loadedState?.activeCycle;
-          final currentDay = activeCycle?.currentCycleDay ?? 1;
-
-          // Détection du jour de règles pour la date sélectionnée
-          final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
-          final selectedJour = _localSavedJours[dateStr] ?? loadedState?.getJourReglesForDate(_selectedDate);
 
           return RefreshIndicator(
             color: AppTheme.primary,
@@ -256,6 +475,14 @@ class _CalendarScreenState extends State<CalendarScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  // 0. Bannière d'objectif principal sélectionné (affiché dès la connexion, mode hors-ligne & changement 1-clic)
+                  UserObjectiveBanner(
+                    profile: _userProfile?.profil,
+                    isOffline: _isOffline(context),
+                    onObjectiveChanged: _handleObjectiveChanged,
+                  ),
+                  const SizedBox(height: 14),
+
                   // 1. Hero Card : Statut Physiologique du Jour
                   _buildHeroStatusCard(activeCycle, currentDay),
                   const SizedBox(height: 16),
@@ -263,6 +490,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
                   // 2. Carte Bien-être au naturel & Illustration bienveillante
                   _buildWellnessInsightCard(activeCycle, currentDay),
                   const SizedBox(height: 18),
+
+                  // 2b. Recommandation d'activation Premium si en version gratuite
+                  _buildSubscriptionRecommendationBanner(),
 
                   // 3. Grille Calendaire Mensuelle
                   _buildCalendarCard(loadedState),
@@ -317,6 +547,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
             ),
           );
         },
+      ),
       ),
       ),
       floatingActionButton: Container(
@@ -396,7 +627,16 @@ class _CalendarScreenState extends State<CalendarScreen> {
         String confidenceText = '';
 
         if (fertState is FertilityLoadedState) {
-          final pred = fertState.currentPrediction;
+          _lastPrediction = fertState.currentPrediction;
+          if (fertState.monthCalendar != null) {
+            _lastMonthCalendar = fertState.monthCalendar;
+          }
+        }
+        final pred = fertState is FertilityLoadedState
+            ? fertState.currentPrediction
+            : _lastPrediction;
+
+        if (pred != null) {
           if (pred.fertilityCategory == 'elevee') {
             fertilityText = 'Élevée (${pred.fertilityScoreValue.round()}%)';
             phaseColor = AppTheme.accentRose;
@@ -425,7 +665,15 @@ class _CalendarScreenState extends State<CalendarScreen> {
               phaseColor = Colors.teal;
             }
           }
-          confidenceText = 'Algorithme : ${pred.confidenceLevel.toUpperCase()}';
+          String confLabel = 'Analyse standard';
+          if (pred.confidenceLevel == 'elevee') {
+            confLabel = 'Précision élevée';
+          } else if (pred.confidenceLevel == 'moyenne') {
+            confLabel = 'Précision modérée';
+          } else {
+            confLabel = 'Précision en cours d\'apprentissage';
+          }
+          confidenceText = confLabel;
         } else {
           // Fallback personnalisé selon les paramètres déclarés dans l'assistant
           if (effectiveDay >= 1 && effectiveDay <= periodDuration) {
@@ -490,7 +738,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
             } else if (phaseLabel.contains('folliculaire')) {
               metricValue = 'Montée d’œstrogènes ⚡';
             } else if (phaseLabel.contains('ovulation') || phaseLabel.contains('fertile')) {
-              metricValue = 'Pic d’œstrogènes & LH 🌸';
+              metricValue = 'Pic d’œstrogènes et hormone d’ovulation 🌸';
             } else {
               metricValue = 'Progestérone dominante 🌙';
             }
@@ -506,11 +754,11 @@ class _CalendarScreenState extends State<CalendarScreen> {
             if (phaseLabel.contains('Règles')) {
               metricValue = 'Règles en cours';
             } else if (daysToNext > 0) {
-              metricValue = 'Prévues dans $daysToNext j';
+              metricValue = 'Prévues dans $daysToNext jours';
             } else if (daysToNext == 0) {
               metricValue = 'Règles attendues aujourd’hui';
             } else {
-              metricValue = 'Retard de ${-daysToNext} j';
+              metricValue = 'Retard de ${-daysToNext} jours';
             }
             break;
         }
@@ -520,7 +768,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
         if (objective == 'planifier_grossesse' || objective == 'concevoir') {
           if (phaseLabel.contains('ovulation') || phaseLabel.contains('fertile')) {
-            wellnessTip = "Période clé : rapports favorables entre J-2 et le jour d'ovulation 🌸";
+            wellnessTip = "Période clé : rapports très favorables entre 2 jours avant et le jour d'ovulation 🌸";
             wellnessIcon = Icons.favorite_rounded;
           } else if (phaseLabel.contains('Règles')) {
             wellnessTip = "Préparation du nid : privilégiez le fer, le zinc et les folates 🍵";
@@ -556,7 +804,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
             wellnessTip = "Hydratation et réconfort : tisanes de framboisier et repos 🍵";
             wellnessIcon = Icons.spa_rounded;
           } else if (effectiveDay >= cycleDuration - 4) {
-            wellnessTip = "Période prémenstruelle : magnésium et étirements pour soulager le SPM 🌙";
+            wellnessTip = "Période prémenstruelle : magnésium et étirements pour soulager le syndrome prémenstruel 🌙";
             wellnessIcon = Icons.self_improvement_rounded;
           } else {
             wellnessTip = "Rythme stable : vitalité et sérénité au quotidien ✨";
@@ -581,30 +829,50 @@ class _CalendarScreenState extends State<CalendarScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.22),
+                  Flexible(
+                    child: InkWell(
+                      onTap: () {
+                        HapticFeedback.lightImpact();
+                        ObjectiveSelectorBottomSheet.show(
+                          context,
+                          currentObjective: objective,
+                          onSelected: _handleObjectiveChanged,
+                        );
+                      },
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(objectiveIcon, size: 13, color: Colors.white),
-                        const SizedBox(width: 5),
-                        Text(
-                          objectiveBadgeLabel,
-                          style: const TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.white,
-                            letterSpacing: 0.6,
-                          ),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.22),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
                         ),
-                      ],
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(objectiveIcon, size: 13, color: Colors.white),
+                            const SizedBox(width: 5),
+                            Flexible(
+                              child: Text(
+                                objectiveBadgeLabel,
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.white,
+                                  letterSpacing: 0.4,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            const Icon(Icons.edit_outlined, size: 10, color: Colors.white70),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
+                  const SizedBox(width: 8),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
@@ -612,7 +880,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
-                      'Cycle : ${cycleDuration}j',
+                      '$cycleDuration jours',
                       style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white70),
                     ),
                   ),
@@ -789,7 +1057,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
       imagePath = 'assets/images/woman_wellness_natural.jpg';
       title = "Ralentir & s’apaiser";
       message = "Votre corps se régénère : privilégiez la douceur, le repos et une hydratation bienfaisante.";
-      badge = "Phase Menstruelle (J$effectiveDay)";
+      badge = "Phase menstruelle (Jour $effectiveDay du cycle)";
     } else if (effectiveDay >= theoreticalOvulation - 5 && effectiveDay <= theoreticalOvulation + 1) {
       imagePath = 'assets/images/woman_wellness_natural.jpg';
       if (objective == 'planifier_grossesse') {
@@ -798,7 +1066,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
         badge = "Objectif Conception 🌸";
       } else if (objective == 'eviter_grossesse') {
         title = "Marge de précaution active";
-        message = "Période à haute probabilité : observez vos signaux de glaire cervicale et appliquez vos règles de protection.";
+        message = "Période à haute probabilité : observez vos signaux de sécrétions intimes et appliquez vos règles de protection.";
         badge = "Méthode Naturelle 🛡️";
       } else {
         title = "Énergie & éclat naturel";
@@ -809,12 +1077,12 @@ class _CalendarScreenState extends State<CalendarScreen> {
       imagePath = 'assets/images/woman_serenity_journal.jpg';
       title = "Harmonie & recentrage";
       message = "Phase d'apaisement : accordez-vous un moment de calme, un sommeil réparateur et de la douceur.";
-      badge = "Phase Lutéale (J$effectiveDay)";
+      badge = "Phase lutéale (Jour $effectiveDay du cycle)";
     } else {
       imagePath = 'assets/images/woman_serenity_journal.jpg';
       title = "Vitalité en essor";
       message = "L'énergie s'éveille progressivement : un moment propice pour vos projets et vos ressentis.";
-      badge = "Phase Folliculaire (J$effectiveDay)";
+      badge = "Phase folliculaire (Jour $effectiveDay du cycle)";
     }
 
     return NaturalWellnessCard(
@@ -920,7 +1188,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                       ),
                       const SizedBox(width: 5),
                       Text(
-                        '(${_userProfile?.profil.dureeMoyenneCycle ?? 28}j)',
+                        '(${_userProfile?.profil.dureeMoyenneCycle ?? 28} jours)',
                         style: const TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
@@ -955,22 +1223,21 @@ class _CalendarScreenState extends State<CalendarScreen> {
           ),
           const SizedBox(height: 10),
 
-          // En-tête jours de la semaine
+          // En-tête jours de la semaine sans abréviations ambiguës et sans débordement
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: const [
-              Text('L', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.textLight)),
-              Text('M', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.textLight)),
-              Text('M', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.textLight)),
-              Text('J', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.textLight)),
-              Text('V', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.textLight)),
-              Text('S', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.textLight)),
-              Text('D', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.textLight)),
+              Expanded(child: Center(child: Text('Lun', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.textDark)))),
+              Expanded(child: Center(child: Text('Mar', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.textDark)))),
+              Expanded(child: Center(child: Text('Mer', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.textDark)))),
+              Expanded(child: Center(child: Text('Jeu', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.textDark)))),
+              Expanded(child: Center(child: Text('Ven', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.textDark)))),
+              Expanded(child: Center(child: Text('Sam', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.textDark)))),
+              Expanded(child: Center(child: Text('Dim', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.textDark)))),
             ],
           ),
           const Divider(height: 20, color: AppTheme.borderLight),
 
-          // Grille des jours
+          // Grille des jours avec repères couleur selon l'objectif
           GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
@@ -997,9 +1264,11 @@ class _CalendarScreenState extends State<CalendarScreen> {
               final jourRegles = _localSavedJours[cellDateStr] ?? state?.getJourReglesForDate(cellDate);
               final hasFlow = jourRegles != null && jourRegles.intensiteFlux != 'absent';
 
-              // Estimation visuelle : fenêtre fertile (ex: J10 à J16 du cycle en cours)
+              // Estimations selon cycle & IA
               final isFertileEstimated = _isFertileDay(cellDate, state?.activeCycle);
               final isOvulationEstimated = _isOvulationDay(cellDate, state?.activeCycle);
+              final hasIntimacy = context.read<ObservationBloc>().cachedDays[cellDateStr]?.rapport != null;
+              final currentObjective = _userProfile?.profil.objectifPrincipal ?? 'suivi_cycle';
 
               return GestureDetector(
                 onTap: () {
@@ -1009,99 +1278,26 @@ class _CalendarScreenState extends State<CalendarScreen> {
                   final dateStr = DateFormat('yyyy-MM-dd').format(cellDate);
                   context.read<ObservationBloc>().add(LoadDayObservationsEvent(dateStr));
                 },
-                child: Container(
-                  decoration: BoxDecoration(
-                    gradient: isSelected ? AppTheme.primaryGradient : null,
-                    color: isSelected
-                        ? null
-                        : hasFlow
-                            ? AppTheme.periodColor.withValues(alpha: 0.25)
-                            : isOvulationEstimated
-                                ? AppTheme.accentRose.withValues(alpha: 0.25)
-                                : isFertileEstimated
-                                    ? AppTheme.primaryLight
-                                    : Colors.transparent,
-                    shape: BoxShape.circle,
-                    boxShadow: isSelected
-                        ? [
-                            BoxShadow(
-                              color: AppTheme.primary.withValues(alpha: 0.35),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ]
-                        : null,
-                    border: Border.all(
-                      color: isToday && !isSelected
-                          ? AppTheme.primary
-                          : Colors.transparent,
-                      width: 1.5,
-                    ),
-                  ),
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      Text(
-                        '$dayNumber',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: (isSelected || isToday) ? FontWeight.bold : FontWeight.w500,
-                          color: isSelected ? Colors.white : AppTheme.textDark,
-                        ),
-                      ),
-                      if (hasFlow && !isSelected)
-                        Positioned(
-                          bottom: 4,
-                          child: Container(
-                            width: 4,
-                            height: 4,
-                            decoration: const BoxDecoration(
-                              color: AppTheme.periodColor,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                        ),
-                      if (isOvulationEstimated && !isSelected)
-                        const Positioned(
-                          top: 2,
-                          right: 2,
-                          child: Icon(Icons.star_rounded, size: 8, color: AppTheme.accentRose),
-                        ),
-                      if (!isSelected &&
-                          context.read<ObservationBloc>().cachedDays[cellDateStr]?.rapport != null)
-                        const Positioned(
-                          top: 2,
-                          left: 2,
-                          child: Icon(Icons.favorite_rounded, size: 7, color: Color(0xFFE91E63)),
-                        ),
-                    ],
-                  ),
+                child: _buildCalendarDayCell(
+                  cellDate: cellDate,
+                  dayNumber: dayNumber,
+                  isSelected: isSelected,
+                  isToday: isToday,
+                  hasFlow: hasFlow,
+                  isFertileEstimated: isFertileEstimated,
+                  isOvulationEstimated: isOvulationEstimated,
+                  hasIntimacy: hasIntimacy,
+                  cellDateStr: cellDateStr,
+                  objective: currentObjective,
+                  state: state,
                 ),
               );
             },
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
 
-          // Légende des couleurs adaptée
-          Builder(
-            builder: (context) {
-              final obj = _userProfile?.profil.objectifPrincipal;
-              String fertileLegend = 'Fenêtre fertile';
-              if (obj == 'planifier_grossesse' || obj == 'concevoir') {
-                fertileLegend = 'Fertilité optimale';
-              } else if (obj == 'eviter_grossesse' || obj == 'contraception_naturelle') {
-                fertileLegend = 'Prudence requise';
-              }
-              return Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _buildLegendItem(AppTheme.periodColor, 'Règles'),
-                  _buildLegendItem(AppTheme.primaryLight, fertileLegend),
-                  _buildLegendItem(AppTheme.accentRose, 'Ovulation'),
-                ],
-              );
-            },
-          ),
+          // Légende des couleurs adaptée à l'objectif actif
+          _buildObjectiveAdaptedLegend(_userProfile?.profil.objectifPrincipal),
         ],
       ),
     );
@@ -1252,8 +1448,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
                           const SizedBox(height: 2),
                           Text(
                             (dayObs != null && dayObs.hasObservations)
-                                ? 'Modifier : T°, glaire, test LH, rapports ou symptômes'
-                                : 'Température basale, glaire, test LH, intimité (chiffrée), ressentis',
+                                ? 'Modifier : Température au réveil, texture des sécrétions, test d\'ovulation, rapports ou ressentis'
+                                : 'Température au réveil, sécrétions intimes, test d\'ovulation, intimité, ressentis',
                             style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
                           ),
                         ],
@@ -1502,7 +1698,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 Icons.calendar_today_rounded,
                 'Cycle rattaché',
                 cycle.isEnCours
-                    ? 'Cycle en cours (J${cycle.currentCycleDay})'
+                    ? 'Cycle en cours (Jour ${cycle.currentCycleDay} du cycle)'
                     : 'Cycle clôturé',
                 AppTheme.primary,
               ),
@@ -1671,14 +1867,14 @@ class _CalendarScreenState extends State<CalendarScreen> {
           badgeIcon = Icons.star_rounded;
           title = 'Jour optimal pour concevoir';
           message = 'L\'ovocyte est libéré et viable de 12 à 24 heures. Un rapport intime aujourd\'hui maximise vos probabilités de conception.';
-          actionLabel = '🌸 Cible prioritaire • Glaire blanc d\'œuf ou test LH +';
+          actionLabel = '🌸 Période clé • Sécrétions étirables ou test d\'ovulation positif';
           actionIcon = Icons.favorite_rounded;
         } else if (isFertile) {
           badge = 'FENÊTRE FERTILE FAVORABLE';
           badgeColor = const Color(0xFFE91E63);
           badgeIcon = Icons.auto_awesome_rounded;
           title = 'Chances de fécondation élevées';
-          message = 'Les spermatozoïdes peuvent survivre jusqu\'à 5 jours dans la glaire cervicale fertile pour attendre l\'ovulation.';
+          message = 'Les spermatozoïdes peuvent survivre jusqu\'à 5 jours dans les sécrétions intimes fertiles pour attendre l\'ovulation.';
           actionLabel = '✨ Rapports recommandés tous les 1 à 2 jours';
           actionIcon = Icons.favorite_border_rounded;
         } else if (isFlowDay || (dayInCycle != null && dayInCycle <= periodDuration && dayInCycle > 0)) {
@@ -1738,7 +1934,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
           badge = 'PRÉ-OVULATION • VIGILANCE';
           badgeColor = Colors.amber.shade900;
           badgeIcon = Icons.search_rounded;
-          title = 'Surveillance quotidienne de la glaire';
+          title = 'Surveillance des sécrétions intimes';
           message = 'Dès les premières sensations d\'humidité ou de glaire filante, la zone de fertilité commence. Restez vigilante.';
           actionLabel = '💧 Observez la texture de vos sécrétions';
           actionIcon = Icons.remove_red_eye_rounded;
@@ -1767,7 +1963,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
           badgeColor = Colors.purple.shade700;
           badgeIcon = Icons.psychology_rounded;
           title = 'Climat de Progestérone dominante';
-          message = 'Votre rythme se tourne vers l\'intérieur. Si la progestérone baisse, le SPM peut émerger : privilégiez le magnésium et la douceur.';
+          message = 'Votre rythme se tourne vers l\'intérieur. Si la progestérone baisse, le syndrome prémenstruel peut émerger : privilégiez le magnésium et la douceur.';
           actionLabel = '🍫 Douceur, magnésium & écoute de soi';
           actionIcon = Icons.self_improvement_rounded;
         } else {
@@ -1797,7 +1993,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
           badge = 'RÈGLES IMMINENTES';
           badgeColor = Colors.amber.shade900;
           badgeIcon = Icons.access_time_rounded;
-          title = 'Phase prémenstruelle (SPM)';
+          title = 'Phase prémenstruelle (avant les règles)';
           message = diff == 0
               ? 'Vos règles sont prévues pour aujourd\'hui. Préparez vos protections.'
               : 'Vos prochaines règles sont attendues dans $diff jours. Prévoyez vos protections et hydratez-vous.';
@@ -1805,7 +2001,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
           actionIcon = Icons.calendar_today_rounded;
         } else if (dayInCycle != null && dayInCycle > cycleDuration) {
           final retard = dayInCycle - cycleDuration;
-          badge = 'RETARD ($retard j)';
+          badge = 'RETARD ($retard jours)';
           badgeColor = Colors.deepOrange.shade800;
           badgeIcon = Icons.warning_amber_rounded;
           title = 'Cycle plus long qu\'habituellement';
@@ -1817,11 +2013,11 @@ class _CalendarScreenState extends State<CalendarScreen> {
           badgeColor = AppTheme.accentRose;
           badgeIcon = Icons.star_border_rounded;
           title = 'Période ovulatoire estimée';
-          message = 'Vous êtes au cœur de votre cycle (J${dayInCycle ?? '--'}). Des sécrétions plus fluides ou de légers tiraillements sont courants.';
+          message = 'Vous êtes au cœur de votre cycle (Jour ${dayInCycle ?? '--'} du cycle). Des sécrétions plus fluides ou de légers tiraillements sont courants.';
           actionLabel = '🌸 Équilibre du milieu de cycle';
           actionIcon = Icons.calendar_today_rounded;
         } else {
-          badge = 'SUIVI DU CYCLE • J${dayInCycle ?? '--'}';
+          badge = 'SUIVI DU CYCLE • Jour ${dayInCycle ?? '--'}';
           badgeColor = AppTheme.primary;
           badgeIcon = Icons.calendar_today_rounded;
           title = 'Progression régulière du cycle';
@@ -1963,26 +2159,446 @@ class _CalendarScreenState extends State<CalendarScreen> {
             ),
           ),
           const SizedBox(width: 8),
-          Text(
-            value,
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: color),
+          Flexible(
+            child: Text(
+              value,
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: color),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildLegendItem(Color color, String label) {
-    return Row(
-      children: [
-        Container(
-          width: 10,
-          height: 10,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+  Widget _buildCalendarDayCell({
+    required DateTime cellDate,
+    required int dayNumber,
+    required bool isSelected,
+    required bool isToday,
+    required bool hasFlow,
+    required bool isFertileEstimated,
+    required bool isOvulationEstimated,
+    required bool hasIntimacy,
+    required String cellDateStr,
+    required String objective,
+    required CyclesLoadedState? state,
+  }) {
+    Color bgColor = Colors.transparent;
+    Color textColor = AppTheme.textDark;
+    Border? border;
+    List<BoxShadow>? shadows;
+    Widget? topBadge;
+    Widget? bottomBadge;
+
+    final profile = _userProfile?.profil;
+    final cycleDuration = profile?.dureeMoyenneCycle ?? 28;
+    final theoreticalOvulation = cycleDuration - 14;
+
+    int? dayInCycle;
+    final startStr = state?.activeCycle?.dateDebut ?? profile?.dateDernieresReglesConnues;
+    if (startStr != null && startStr.isNotEmpty) {
+      try {
+        final start = DateTime.parse(startStr);
+        final diff = cellDate.difference(start).inDays + 1;
+        if (diff > 0 && diff <= 120) dayInCycle = diff;
+      } catch (_) {}
+    }
+
+    switch (objective) {
+      case 'planifier_grossesse':
+      case 'concevoir':
+        if (hasFlow) {
+          bgColor = const Color(0xFFFFEBEE);
+          textColor = const Color(0xFFC62828);
+          border = Border.all(color: const Color(0xFFEF5350).withValues(alpha: 0.6), width: 1.2);
+          bottomBadge = const Icon(Icons.water_drop_rounded, size: 7, color: Color(0xFFE53935));
+        } else if (isOvulationEstimated) {
+          bgColor = const Color(0xFFFFF8E1);
+          textColor = const Color(0xFFB78103);
+          border = Border.all(color: const Color(0xFFFFB300), width: 1.8);
+          topBadge = const Icon(Icons.star_rounded, size: 9, color: Color(0xFFFF8F00));
+        } else if (isFertileEstimated) {
+          bgColor = const Color(0xFFFCE4EC);
+          textColor = const Color(0xFFC2185B);
+          border = Border.all(color: const Color(0xFFF06292).withValues(alpha: 0.6), width: 1.2);
+          topBadge = const Icon(Icons.auto_awesome_rounded, size: 7, color: Color(0xFFE91E63));
+        } else {
+          bgColor = Colors.white.withValues(alpha: 0.5);
+          textColor = AppTheme.textDark;
+        }
+        break;
+
+      case 'eviter_grossesse':
+      case 'contraception_naturelle':
+        if (hasFlow) {
+          bgColor = const Color(0xFFFFEBEE);
+          textColor = const Color(0xFFC62828);
+          border = Border.all(color: const Color(0xFFEF5350).withValues(alpha: 0.6), width: 1.2);
+          bottomBadge = const Icon(Icons.water_drop_rounded, size: 7, color: Color(0xFFE53935));
+        } else if (isOvulationEstimated || isFertileEstimated) {
+          bgColor = const Color(0xFFFFF3E0);
+          textColor = const Color(0xFFD84315);
+          border = Border.all(color: const Color(0xFFFF7043), width: 1.8);
+          topBadge = const Icon(Icons.shield_rounded, size: 8, color: Color(0xFFE64A19));
+        } else if (dayInCycle != null && dayInCycle > theoreticalOvulation + 1) {
+          bgColor = const Color(0xFFE8F5E9);
+          textColor = const Color(0xFF2E7D32);
+          border = Border.all(color: const Color(0xFFA5D6A7).withValues(alpha: 0.8), width: 1.2);
+          bottomBadge = const Icon(Icons.check_circle_rounded, size: 7, color: Color(0xFF43A047));
+        } else {
+          bgColor = Colors.white.withValues(alpha: 0.5);
+          textColor = AppTheme.textDark;
+        }
+        break;
+
+      case 'comprendre_corps':
+        if (hasFlow) {
+          bgColor = const Color(0xFFFFEBEE);
+          textColor = const Color(0xFFC62828);
+          border = Border.all(color: const Color(0xFFEF5350).withValues(alpha: 0.6), width: 1.2);
+          bottomBadge = const Icon(Icons.water_drop_rounded, size: 7, color: Color(0xFFE53935));
+        } else if (isOvulationEstimated) {
+          bgColor = const Color(0xFFFFF8E1);
+          textColor = const Color(0xFFB78103);
+          border = Border.all(color: const Color(0xFFFFB300), width: 1.8);
+          topBadge = const Icon(Icons.star_rounded, size: 9, color: Color(0xFFFF8F00));
+        } else if (isFertileEstimated || (dayInCycle != null && dayInCycle > 5 && dayInCycle <= theoreticalOvulation)) {
+          bgColor = const Color(0xFFE0F2F1);
+          textColor = const Color(0xFF00695C);
+          border = Border.all(color: const Color(0xFF80CBC4), width: 1.2);
+          topBadge = const Icon(Icons.bolt_rounded, size: 8, color: Color(0xFF00897B));
+        } else if (dayInCycle != null && dayInCycle > theoreticalOvulation + 1) {
+          bgColor = const Color(0xFFEDE7F6);
+          textColor = const Color(0xFF4527A0);
+          border = Border.all(color: const Color(0xFFB39DDB), width: 1.2);
+          topBadge = const Icon(Icons.nightlight_round, size: 7, color: Color(0xFF7E57C2));
+        } else {
+          bgColor = Colors.white.withValues(alpha: 0.5);
+          textColor = AppTheme.textDark;
+        }
+        break;
+
+      case 'suivi_cycle':
+      case 'suivre_cycle':
+      default:
+        if (hasFlow) {
+          bgColor = const Color(0xFFFFEBEE);
+          textColor = const Color(0xFFC62828);
+          border = Border.all(color: const Color(0xFFEF5350).withValues(alpha: 0.6), width: 1.2);
+          bottomBadge = const Icon(Icons.water_drop_rounded, size: 7, color: Color(0xFFE53935));
+        } else if (isOvulationEstimated) {
+          bgColor = const Color(0xFFFFF8E1);
+          textColor = const Color(0xFFB78103);
+          border = Border.all(color: const Color(0xFFFFB300), width: 1.8);
+          topBadge = const Icon(Icons.star_rounded, size: 9, color: Color(0xFFFF8F00));
+        } else if (isFertileEstimated) {
+          bgColor = const Color(0xFFFCE4EC);
+          textColor = const Color(0xFFC2185B);
+          border = Border.all(color: const Color(0xFFF06292).withValues(alpha: 0.6), width: 1.2);
+          topBadge = const Icon(Icons.auto_awesome_rounded, size: 7, color: Color(0xFFE91E63));
+        } else {
+          bgColor = Colors.white.withValues(alpha: 0.5);
+          textColor = AppTheme.textDark;
+        }
+        break;
+    }
+
+    if (isSelected) {
+      border = Border.all(color: AppTheme.primary, width: 2.4);
+      shadows = [
+        BoxShadow(
+          color: AppTheme.primary.withValues(alpha: 0.4),
+          blurRadius: 10,
+          spreadRadius: 1,
+          offset: const Offset(0, 2),
         ),
-        const SizedBox(width: 6),
-        Text(label, style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
-      ],
+      ];
+    } else if (isToday) {
+      border = Border.all(color: AppTheme.primary.withValues(alpha: 0.8), width: 1.6);
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: bgColor,
+        shape: BoxShape.circle,
+        border: border,
+        boxShadow: shadows,
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Text(
+            '$dayNumber',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: (isSelected || isToday) ? FontWeight.bold : FontWeight.w600,
+              color: textColor,
+            ),
+          ),
+          if (topBadge != null)
+            Positioned(
+              top: 2,
+              right: 2,
+              child: topBadge,
+            ),
+          if (bottomBadge != null)
+            Positioned(
+              bottom: 2,
+              child: bottomBadge,
+            ),
+          if (hasIntimacy)
+            const Positioned(
+              top: 2,
+              left: 2,
+              child: Icon(Icons.favorite_rounded, size: 8, color: Color(0xFFE91E63)),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildObjectiveAdaptedLegend(String? objective) {
+    final items = <_LegendItemData>[];
+
+    switch (objective) {
+      case 'planifier_grossesse':
+      case 'concevoir':
+        items.addAll([
+          const _LegendItemData(
+            color: Color(0xFFFFEBEE),
+            borderColor: Color(0xFFEF5350),
+            icon: Icons.water_drop_rounded,
+            iconColor: Color(0xFFE53935),
+            title: 'Menstruations',
+            subtitle: 'Règles en cours',
+          ),
+          const _LegendItemData(
+            color: Color(0xFFFFF8E1),
+            borderColor: Color(0xFFFFB300),
+            icon: Icons.star_rounded,
+            iconColor: Color(0xFFFF8F00),
+            title: 'Jour d’ovulation',
+            subtitle: 'Chances maximales',
+          ),
+          const _LegendItemData(
+            color: Color(0xFFFCE4EC),
+            borderColor: Color(0xFFF06292),
+            icon: Icons.auto_awesome_rounded,
+            iconColor: Color(0xFFE91E63),
+            title: 'Période fertile',
+            subtitle: 'Fenêtre favorable',
+          ),
+          const _LegendItemData(
+            color: Colors.white,
+            borderColor: Color(0xFFF48FB1),
+            icon: Icons.favorite_rounded,
+            iconColor: Color(0xFFE91E63),
+            title: 'Rapport intime',
+            subtitle: 'Consigné',
+          ),
+        ]);
+        break;
+
+      case 'eviter_grossesse':
+      case 'contraception_naturelle':
+        items.addAll([
+          const _LegendItemData(
+            color: Color(0xFFFFEBEE),
+            borderColor: Color(0xFFEF5350),
+            icon: Icons.water_drop_rounded,
+            iconColor: Color(0xFFE53935),
+            title: 'Menstruations',
+            subtitle: 'Règles',
+          ),
+          const _LegendItemData(
+            color: Color(0xFFFFF3E0),
+            borderColor: Color(0xFFFF7043),
+            icon: Icons.shield_rounded,
+            iconColor: Color(0xFFE64A19),
+            title: 'Zone de précaution',
+            subtitle: 'Protection requise',
+          ),
+          const _LegendItemData(
+            color: Color(0xFFE8F5E9),
+            borderColor: Color(0xFFA5D6A7),
+            icon: Icons.check_circle_rounded,
+            iconColor: Color(0xFF43A047),
+            title: 'Zone sécurisée',
+            subtitle: 'Post-ovulation',
+          ),
+          const _LegendItemData(
+            color: Colors.white,
+            borderColor: Color(0xFFF48FB1),
+            icon: Icons.favorite_rounded,
+            iconColor: Color(0xFFE91E63),
+            title: 'Rapport intime',
+            subtitle: 'Consigné',
+          ),
+        ]);
+        break;
+
+      case 'comprendre_corps':
+        items.addAll([
+          const _LegendItemData(
+            color: Color(0xFFFFEBEE),
+            borderColor: Color(0xFFEF5350),
+            icon: Icons.water_drop_rounded,
+            iconColor: Color(0xFFE53935),
+            title: 'Hiver intérieur',
+            subtitle: 'Règles & repos',
+          ),
+          const _LegendItemData(
+            color: Color(0xFFE0F2F1),
+            borderColor: Color(0xFF80CBC4),
+            icon: Icons.bolt_rounded,
+            iconColor: Color(0xFF00897B),
+            title: 'Printemps',
+            subtitle: 'Montée d’énergie',
+          ),
+          const _LegendItemData(
+            color: Color(0xFFFFF8E1),
+            borderColor: Color(0xFFFFB300),
+            icon: Icons.star_rounded,
+            iconColor: Color(0xFFFF8F00),
+            title: 'Été rayonnant',
+            subtitle: 'Pic hormonal',
+          ),
+          const _LegendItemData(
+            color: Color(0xFFEDE7F6),
+            borderColor: Color(0xFFB39DDB),
+            icon: Icons.nightlight_round,
+            iconColor: Color(0xFF7E57C2),
+            title: 'Automne cocooning',
+            subtitle: 'Phase lutéale',
+          ),
+        ]);
+        break;
+
+      case 'suivi_cycle':
+      case 'suivre_cycle':
+      default:
+        items.addAll([
+          const _LegendItemData(
+            color: Color(0xFFFFEBEE),
+            borderColor: Color(0xFFEF5350),
+            icon: Icons.water_drop_rounded,
+            iconColor: Color(0xFFE53935),
+            title: 'Menstruations',
+            subtitle: 'Règles consignées',
+          ),
+          const _LegendItemData(
+            color: Color(0xFFFFF8E1),
+            borderColor: Color(0xFFFFB300),
+            icon: Icons.star_rounded,
+            iconColor: Color(0xFFFF8F00),
+            title: 'Jour d’ovulation',
+            subtitle: 'Milieu de cycle',
+          ),
+          const _LegendItemData(
+            color: Color(0xFFFCE4EC),
+            borderColor: Color(0xFFF06292),
+            icon: Icons.auto_awesome_rounded,
+            iconColor: Color(0xFFE91E63),
+            title: 'Période fertile',
+            subtitle: 'Fenêtre 6 jours',
+          ),
+          const _LegendItemData(
+            color: Colors.white,
+            borderColor: Color(0xFFF48FB1),
+            icon: Icons.favorite_rounded,
+            iconColor: Color(0xFFE91E63),
+            title: 'Rapport intime',
+            subtitle: 'Consigné',
+          ),
+        ]);
+        break;
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppTheme.background,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppTheme.borderLight),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: const [
+              Icon(Icons.palette_outlined, size: 14, color: AppTheme.primary),
+              SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  'Légende personnalisée à votre objectif :',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.textDark,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: items.map((item) => _buildLegendChip(item)).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLegendChip(_LegendItemData item) {
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 160),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: item.color,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: item.borderColor.withValues(alpha: 0.8), width: 1.2),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(item.icon, size: 13, color: item.iconColor),
+          const SizedBox(width: 5),
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  item.title,
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.bold,
+                    color: item.iconColor,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  item.subtitle,
+                  style: const TextStyle(
+                    fontSize: 9,
+                    color: AppTheme.textMuted,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1993,16 +2609,17 @@ class _CalendarScreenState extends State<CalendarScreen> {
   bool _isFertileDay(DateTime date, CycleModel? cycle) {
     try {
       final fertState = context.read<FertilityBloc>().state;
-      if (fertState is FertilityLoadedState) {
+      final pred = fertState is FertilityLoadedState ? fertState.currentPrediction : _lastPrediction;
+      final monthCal = fertState is FertilityLoadedState ? fertState.monthCalendar : _lastMonthCalendar;
+      if (pred != null) {
         final dateStr = DateFormat('yyyy-MM-dd').format(date);
-        final monthCal = fertState.monthCalendar;
         if (monthCal != null) {
           for (final d in monthCal.days) {
             if (d.date == dateStr) return d.isFertileDay;
           }
         }
-        final start = fertState.currentPrediction.fertileWindow.startDate;
-        final end = fertState.currentPrediction.fertileWindow.endDate;
+        final start = pred.fertileWindow.startDate;
+        final end = pred.fertileWindow.endDate;
         if (start.isNotEmpty && end.isNotEmpty) {
           return dateStr.compareTo(start) >= 0 && dateStr.compareTo(end) <= 0;
         }
@@ -2028,15 +2645,16 @@ class _CalendarScreenState extends State<CalendarScreen> {
   bool _isOvulationDay(DateTime date, CycleModel? cycle) {
     try {
       final fertState = context.read<FertilityBloc>().state;
-      if (fertState is FertilityLoadedState) {
+      final pred = fertState is FertilityLoadedState ? fertState.currentPrediction : _lastPrediction;
+      final monthCal = fertState is FertilityLoadedState ? fertState.monthCalendar : _lastMonthCalendar;
+      if (pred != null) {
         final dateStr = DateFormat('yyyy-MM-dd').format(date);
-        final monthCal = fertState.monthCalendar;
         if (monthCal != null) {
           for (final d in monthCal.days) {
             if (d.date == dateStr) return d.isOvulationDay;
           }
         }
-        final ovulation = fertState.currentPrediction.estimatedOvulationDate;
+        final ovulation = pred.estimatedOvulationDate;
         if (ovulation != null && ovulation.isNotEmpty) {
           return dateStr == ovulation;
         }
@@ -2055,4 +2673,22 @@ class _CalendarScreenState extends State<CalendarScreen> {
       return false;
     }
   }
+}
+
+class _LegendItemData {
+  final Color color;
+  final Color borderColor;
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final String subtitle;
+
+  const _LegendItemData({
+    required this.color,
+    required this.borderColor,
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.subtitle,
+  });
 }

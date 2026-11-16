@@ -159,8 +159,6 @@ class ObservationBloc extends Bloc<ObservationEvent, ObservationState> {
   ) async {
     if (cachedBbtAnalysis != null) {
       emit(BbtAnalysisLoadedState(analysis: cachedBbtAnalysis!, isRefreshing: true));
-    } else {
-      emit(ObservationLoadingState());
     }
     try {
       final analysis = await observationRepository.getBbtAnalysis(
@@ -172,8 +170,6 @@ class ObservationBloc extends Bloc<ObservationEvent, ObservationState> {
     } catch (e) {
       if (cachedBbtAnalysis != null) {
         emit(BbtAnalysisLoadedState(analysis: cachedBbtAnalysis!));
-      } else {
-        emit(ObservationFailureState(ApiException.getDisplayMessage(e)));
       }
     }
   }

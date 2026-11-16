@@ -4,6 +4,9 @@ import '../../../../core/di/service_locator.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/glass_skeleton_loader.dart';
 import '../../../../core/error/error_feedback.dart';
+import '../../../subscriptions/presentation/bloc/subscription_bloc.dart';
+import '../../../subscriptions/presentation/bloc/subscription_state.dart';
+import '../../../subscriptions/presentation/widgets/premium_paywall_card.dart';
 import '../../../users/data/models/user_profile_model.dart';
 import '../bloc/fertility_bloc.dart';
 import '../../data/models/fertility_models.dart';
@@ -245,31 +248,57 @@ class _FertilityExplanationBottomSheetState
                       _buildScoreGaugeCard(prediction),
                       const SizedBox(height: 20),
 
-                      // 2. Niveau de confiance
-                      _buildConfidenceCard(prediction),
-                      const SizedBox(height: 22),
+                      // 3. Confiance & Facteurs explicatifs (Premium)
+                      BlocBuilder<SubscriptionBloc, SubscriptionState>(
+                        bloc: ServiceLocator.subscriptionBloc,
+                        builder: (context, subState) {
+                          final isPremium = subState is SubscriptionLoadedState &&
+                              subState.subscription.isPremium;
+                          final paywallsEnabled = subState is SubscriptionLoadedState
+                              ? subState.policy.exigencePaywallsPremium
+                              : true;
 
-                      // 3. Titre Facteurs
-                      const Text(
-                        'Facteurs pris en compte (Explicabilité)',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.textDark,
-                        ),
+                          if (!isPremium && paywallsEnabled) {
+                            return const Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                PremiumPaywallCard(
+                                  title: 'Indice de confiance & Facteurs explicatifs',
+                                  description:
+                                      'Découvrez l\'indice de fiabilité exact de votre prédiction et le poids de chaque biomarqueur (glaire, BBT, tests LH, historique) avec Premium.',
+                                  icon: Icons.psychology_alt_rounded,
+                                ),
+                                SizedBox(height: 16),
+                              ],
+                            );
+                          }
+
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _buildConfidenceCard(prediction),
+                              const SizedBox(height: 22),
+                              const Text(
+                                'Facteurs pris en compte (Explicabilité)',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppTheme.textDark,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              if (prediction.factors.isEmpty)
+                                const Text(
+                                  'Aucun facteur disponible pour cette estimation.',
+                                  style: TextStyle(fontSize: 13, color: AppTheme.textMuted),
+                                )
+                              else
+                                ...prediction.factors.map((factor) => _buildFactorCard(factor)),
+                              const SizedBox(height: 16),
+                            ],
+                          );
+                        },
                       ),
-                      const SizedBox(height: 12),
-
-                      // 4. Cartes des facteurs
-                      if (prediction.factors.isEmpty)
-                        const Text(
-                          'Aucun facteur disponible pour cette estimation.',
-                          style: TextStyle(fontSize: 13, color: AppTheme.textMuted),
-                        )
-                      else
-                        ...prediction.factors.map((factor) => _buildFactorCard(factor)),
-
-                      const SizedBox(height: 16),
 
                       // 5. Bouton Recalculer
                       OutlinedButton.icon(

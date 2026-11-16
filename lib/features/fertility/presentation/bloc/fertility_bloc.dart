@@ -19,12 +19,26 @@ class FertilityBloc extends Bloc<FertilityEvent, FertilityState> {
     LoadCurrentFertilityEvent event,
     Emitter<FertilityState> emit,
   ) async {
-    emit(const FertilityLoadingState());
+    // 1. Tenter d'émettre immédiatement la prédiction en cache pour zéro attente
+    final cached = await fertilityRepository.getCachedCurrentPrediction();
+    if (cached != null && state is! FertilityLoadedState) {
+      emit(FertilityLoadedState(currentPrediction: cached));
+    } else if (state is! FertilityLoadedState) {
+      emit(const FertilityLoadingState());
+    }
+
+    // 2. Récupérer la dernière prédiction du serveur (ou repli sur cache si échec)
     try {
       final prediction = await fertilityRepository.getCurrentPrediction();
-      emit(FertilityLoadedState(currentPrediction: prediction));
+      if (state is FertilityLoadedState) {
+        emit((state as FertilityLoadedState).copyWith(currentPrediction: prediction));
+      } else {
+        emit(FertilityLoadedState(currentPrediction: prediction));
+      }
     } catch (e) {
-      emit(FertilityFailureState(message: e.toString()));
+      if (state is! FertilityLoadedState) {
+        emit(FertilityFailureState(message: e.toString()));
+      }
     }
   }
 
@@ -33,7 +47,9 @@ class FertilityBloc extends Bloc<FertilityEvent, FertilityState> {
     Emitter<FertilityState> emit,
   ) async {
     final previousState = state;
-    emit(const FertilityLoadingState());
+    if (state is! FertilityLoadedState) {
+      emit(const FertilityLoadingState());
+    }
     try {
       final prediction = await fertilityRepository.recalculateFertility(
         evaluationDate: event.evaluationDate,
@@ -44,7 +60,9 @@ class FertilityBloc extends Bloc<FertilityEvent, FertilityState> {
         emit(FertilityLoadedState(currentPrediction: prediction));
       }
     } catch (e) {
-      emit(FertilityFailureState(message: e.toString()));
+      if (state is! FertilityLoadedState) {
+        emit(FertilityFailureState(message: e.toString()));
+      }
     }
   }
 
@@ -52,6 +70,25 @@ class FertilityBloc extends Bloc<FertilityEvent, FertilityState> {
     LoadMonthCalendarEvent event,
     Emitter<FertilityState> emit,
   ) async {
+    // Émission préalable depuis le cache si disponible
+    final cachedCalendar = await fertilityRepository.getCachedMonthCalendar(
+      year: event.year,
+      month: event.month,
+    );
+    if (cachedCalendar != null) {
+      if (state is FertilityLoadedState) {
+        emit((state as FertilityLoadedState).copyWith(monthCalendar: cachedCalendar));
+      } else {
+        final cachedPred = await fertilityRepository.getCachedCurrentPrediction();
+        if (cachedPred != null) {
+          emit(FertilityLoadedState(
+            currentPrediction: cachedPred,
+            monthCalendar: cachedCalendar,
+          ));
+        }
+      }
+    }
+
     try {
       final calendar = await fertilityRepository.getMonthCalendar(
         year: event.year,

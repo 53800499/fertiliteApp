@@ -161,6 +161,18 @@ class CalendarDaySummaryModel {
       hasObservations: json['hasObservations'] as bool? ?? false,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'date': date,
+        'isPeriodDay': isPeriodDay,
+        if (flowIntensity != null) 'flowIntensity': flowIntensity,
+        if (painLevel != null) 'painLevel': painLevel,
+        'isFertileDay': isFertileDay,
+        'isOvulationDay': isOvulationDay,
+        if (fertilityCategory != null) 'fertilityCategory': fertilityCategory,
+        if (fertilityScore != null) 'fertilityScore': fertilityScore,
+        'hasObservations': hasObservations,
+      };
 }
 
 class CalendarMonthModel {
@@ -196,4 +208,14 @@ class CalendarMonthModel {
           .toList(),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'year': year,
+        'month': month,
+        if (activeCycleId != null) 'activeCycleId': activeCycleId,
+        if (estimatedOvulationDate != null) 'estimatedOvulationDate': estimatedOvulationDate,
+        if (fertileWindowStartDate != null) 'fertileWindowStartDate': fertileWindowStartDate,
+        if (fertileWindowEndDate != null) 'fertileWindowEndDate': fertileWindowEndDate,
+        'days': days.map((d) => d.toJson()).toList(),
+      };
 }

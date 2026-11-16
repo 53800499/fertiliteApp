@@ -15,8 +15,8 @@ import '../../../../core/widgets/modern_app_header.dart';
 import '../../../../core/widgets/natural_wellness_card.dart';
 import '../../../../core/widgets/atmospheric_background.dart';
 import '../../../../core/widgets/glass_card.dart';
-import '../../../../core/widgets/glass_skeleton_loader.dart';
 import '../../../../core/error/error_feedback.dart';
+import '../../../subscriptions/presentation/widgets/premium_paywall_card.dart';
 
 class CycleHistoryScreen extends StatefulWidget {
   const CycleHistoryScreen({super.key});
@@ -26,6 +26,8 @@ class CycleHistoryScreen extends StatefulWidget {
 }
 
 class _CycleHistoryScreenState extends State<CycleHistoryScreen> {
+  CyclesLoadedState? _lastLoadedCycles;
+
   @override
   void initState() {
     super.initState();
@@ -60,6 +62,9 @@ class _CycleHistoryScreenState extends State<CycleHistoryScreen> {
         imagePath: 'assets/images/woman_cycle_history.jpg',
         child: BlocConsumer<CycleBloc, CycleState>(
           listener: (context, state) {
+            if (state is CyclesLoadedState) {
+              _lastLoadedCycles = state;
+            }
             if (state is CycleFailureState) {
               AppFeedback.showError(
                 context,
@@ -69,18 +74,36 @@ class _CycleHistoryScreenState extends State<CycleHistoryScreen> {
             }
           },
           builder: (context, state) {
-            if (state is CycleLoadingState) {
-              return const HistorySkeletonView();
+            if (state is CyclesLoadedState) {
+              _lastLoadedCycles = state;
             }
 
-          if (state is CycleFailureState) {
-            final isOffline = _isOffline(context) ||
-                state.message.toLowerCase().contains('connexion') ||
-                state.message.toLowerCase().contains('hors ligne') ||
-                state.message.toLowerCase().contains('socketexception') ||
-                state.message.toLowerCase().contains('failed host lookup');
+            final effectiveState = state is CyclesLoadedState ? state : _lastLoadedCycles;
 
-            if (isOffline) {
+            // En cas d'erreur réseau seulement si aucune donnée n'est disponible en mémoire/cache
+            if (state is CycleFailureState && effectiveState == null) {
+              final isOffline = _isOffline(context) ||
+                  state.message.toLowerCase().contains('connexion') ||
+                  state.message.toLowerCase().contains('hors ligne') ||
+                  state.message.toLowerCase().contains('socketexception') ||
+                  state.message.toLowerCase().contains('failed host lookup');
+
+              if (isOffline) {
+                return RefreshIndicator(
+                  color: AppTheme.primary,
+                  backgroundColor: Colors.white,
+                  onRefresh: _handleRefresh,
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(
+                      parent: BouncingScrollPhysics(),
+                    ),
+                    child: OfflineStateView(
+                      onRetry: _handleRefresh,
+                    ),
+                  ),
+                );
+              }
+
               return RefreshIndicator(
                 color: AppTheme.primary,
                 backgroundColor: Colors.white,
@@ -89,30 +112,15 @@ class _CycleHistoryScreenState extends State<CycleHistoryScreen> {
                   physics: const AlwaysScrollableScrollPhysics(
                     parent: BouncingScrollPhysics(),
                   ),
-                  child: OfflineStateView(
+                  child: AppErrorEmptyView(
+                    error: state.message,
                     onRetry: _handleRefresh,
                   ),
                 ),
               );
             }
 
-            return RefreshIndicator(
-              color: AppTheme.primary,
-              backgroundColor: Colors.white,
-              onRefresh: _handleRefresh,
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(
-                  parent: BouncingScrollPhysics(),
-                ),
-                child: AppErrorEmptyView(
-                  error: state.message,
-                  onRetry: _handleRefresh,
-                ),
-              ),
-            );
-          }
-
-          final cycles = state is CyclesLoadedState ? state.cycles : <CycleModel>[];
+            final cycles = effectiveState?.cycles ?? <CycleModel>[];
 
           if (cycles.isEmpty) {
             return RefreshIndicator(
@@ -135,6 +143,8 @@ class _CycleHistoryScreenState extends State<CycleHistoryScreen> {
           }
 
           // Calculs statistiques rapides
+          final isRestricted = PremiumPaywallHelper.shouldEnforcePaywall(context);
+          final displayedCycles = isRestricted ? cycles.take(3).toList() : cycles;
           final completedCycles = cycles.where((c) => c.dureeCycleJours != null).toList();
           double avgCycleLength = 28.0;
           if (completedCycles.isNotEmpty) {
@@ -185,14 +195,41 @@ class _CycleHistoryScreenState extends State<CycleHistoryScreen> {
                   ),
                   const SizedBox(height: 24),
 
-                  const Text(
-                    'Tous vos cycles',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.textDark),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        !isRestricted ? 'Tous vos cycles' : 'Vos 3 derniers cycles',
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.textDark),
+                      ),
+                      if (isRestricted)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primary.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Text(
+                            'Formule Gratuite (max 3)',
+                            style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: AppTheme.primary),
+                          ),
+                        ),
+                    ],
                   ),
                   const SizedBox(height: 12),
 
                   // Liste chronologique des cycles
-                  ...cycles.map((cycle) => _buildCycleCard(cycle)),
+                  ...displayedCycles.map((cycle) => _buildCycleCard(cycle)),
+
+                  if (isRestricted && cycles.length >= 3) ...[
+                    const SizedBox(height: 8),
+                    const PremiumPaywallCard(
+                      title: 'Historique complet au-delà de 3 cycles',
+                      description:
+                          'En formule gratuite, seuls vos 3 derniers cycles sont affichés. Passez à Premium pour consulter et modifier l\'ensemble de votre historique.',
+                      icon: Icons.history_rounded,
+                    ),
+                  ],
                   const SizedBox(height: 24),
                 ],
               ),

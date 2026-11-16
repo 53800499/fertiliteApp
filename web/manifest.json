@@ -1,11 +1,11 @@
 {
-    "name": "frontend",
-    "short_name": "frontend",
+    "name": "FertiliteApp",
+    "short_name": "FertiliteApp",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#FBF9FC",
+    "theme_color": "#8E24AA",
+    "description": "FertiliteApp - Suivi du cycle menstruel et fertilité naturelle.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

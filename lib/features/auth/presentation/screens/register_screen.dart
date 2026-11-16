@@ -20,6 +20,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  final _referralCodeController = TextEditingController();
   DateTime? _selectedBirthDate;
   bool _obscurePassword = true;
 
@@ -34,6 +35,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
+    _referralCodeController.dispose();
     super.dispose();
   }
 
@@ -43,7 +45,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       context: context,
       initialDate: _selectedBirthDate ?? DateTime(now.year - 24, 1, 1),
       firstDate: DateTime(1940),
-      lastDate: DateTime(now.year - 12, now.month, now.day),
+      lastDate: DateTime(now.year - 16, now.month, now.day),
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
@@ -81,11 +83,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
         (today.month == _selectedBirthDate!.month && today.day < _selectedBirthDate!.day)) {
       age--;
     }
-    if (age < 12) {
+    if (age < 16) {
       AppFeedback.showWarning(
         context,
-        title: 'Âge minimum requis (12 ans)',
-        message: 'L\'application est réservée aux personnes âgées d\'au moins 12 ans conformément aux règles de protection des données de santé.',
+        title: 'Âge minimum requis (16 ans)',
+        message: 'L\'application est réservée aux personnes âgées d\'au moins 16 ans conformément aux règles de protection des données de santé.',
       );
       return;
     }
@@ -102,12 +104,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final formattedBirthDate =
         "${_selectedBirthDate!.year.toString().padLeft(4, '0')}-${_selectedBirthDate!.month.toString().padLeft(2, '0')}-${_selectedBirthDate!.day.toString().padLeft(2, '0')}";
 
+    final referralCode = _referralCodeController.text.trim();
     final request = RegisterRequestModel(
       email: _emailController.text.trim(),
       password: _passwordController.text,
       birthDate: formattedBirthDate,
       preferredLanguage: 'fr',
       timezone: 'Africa/Porto-Novo',
+      referralCode: referralCode.isEmpty ? null : referralCode.toUpperCase(),
       consents: [
         ConsentItemModel(type: 'cgu', version: '1.0', accepted: _consentCgu),
         ConsentItemModel(type: 'politique_confidentialite', version: '1.0', accepted: _consentPrivacy),
@@ -152,10 +156,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   : (state.isServerWakingUp ? _submit : null),
             );
           } else if (state is AuthenticatedState) {
+            final hasReferral = _referralCodeController.text.trim().isNotEmpty;
             AppFeedback.showSuccess(
               context,
               title: 'Compte créé avec succès 🎉',
-              message: 'Bienvenue sur FertiliteApp ! Votre espace santé et fertilité est prêt.',
+              message: hasReferral
+                  ? 'Bienvenue sur FertiliteApp ! Vos 30 jours Premium de parrainage ont été activés.'
+                  : 'Bienvenue sur FertiliteApp ! Votre espace santé et fertilité est prêt.',
             );
             Navigator.maybePop(context);
           }
@@ -171,14 +178,40 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      // Logo officiel FertiliteApp
+                      Center(
+                        child: Container(
+                          width: 80,
+                          height: 80,
+                          margin: const EdgeInsets.only(bottom: 18),
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                            boxShadow: AppTheme.floatingShadow,
+                            border: Border.all(
+                              color: AppTheme.primary.withValues(alpha: 0.15),
+                              width: 2,
+                            ),
+                          ),
+                          child: ClipOval(
+                            child: Image.asset(
+                              'assets/images/logo.png',
+                              fit: BoxFit.contain,
+                            ),
+                          ),
+                        ),
+                      ),
                       // Titre & Sous-titre
                       const Text(
                         'Bienvenue sur FertiliteApp',
+                        textAlign: TextAlign.center,
                         style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: AppTheme.textDark),
                       ),
                       const SizedBox(height: 6),
                       const Text(
                         'Vos données restent confidentielles et chiffrées au repos.',
+                        textAlign: TextAlign.center,
                         style: TextStyle(fontSize: 13.5, color: AppTheme.textMuted),
                       ),
                       const SizedBox(height: 16),
@@ -325,7 +358,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                       child: Column(
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
-                                          const Text('Date de naissance', style: TextStyle(fontSize: 11.5, color: AppTheme.textMuted)),
+                                          const Text('Date de naissance (16 ans minimum)', style: TextStyle(fontSize: 11.5, color: AppTheme.textMuted)),
                                           const SizedBox(height: 2),
                                           Text(
                                             _selectedBirthDate == null
@@ -343,6 +376,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                     const Icon(Icons.calendar_month_rounded, color: AppTheme.primary, size: 20),
                                   ],
                                 ),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            TextFormField(
+                              controller: _referralCodeController,
+                              textCapitalization: TextCapitalization.characters,
+                              decoration: const InputDecoration(
+                                labelText: 'Code de parrainage (Optionnel)',
+                                hintText: 'Ex: FERT-AB123',
+                                helperText: 'Saisissable uniquement à l\'inscription (+30 jours Premium offerts)',
+                                helperMaxLines: 2,
+                                prefixIcon: Icon(Icons.card_giftcard_rounded, color: AppTheme.accentRose, size: 20),
                               ),
                             ),
                           ],

@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import '../../../../core/constants/api_constants.dart';
 import '../../../../core/error/api_exception.dart';
 import '../../../../core/security/secure_storage_helper.dart';
+import '../../../notifications/services/local_notification_service.dart';
 import '../models/auth_models.dart';
 
 abstract class IAuthRemoteDataSource {
@@ -75,6 +76,7 @@ class AuthRemoteDataSourceImpl implements IAuthRemoteDataSource {
     } catch (_) {
       // Ignorer l'erreur côté serveur lors de la déconnexion pour garantir la purge locale
     } finally {
+      await LocalNotificationService.instance.cancelAll();
       await storage.clearAllTokens();
     }
   }
